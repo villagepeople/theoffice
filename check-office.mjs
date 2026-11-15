@@ -104,4 +104,45 @@ test('evicted gym outsiders stay gone and a fire cancels their phone lecture',()
  const returned=other.state.npcs.find(n=>n.id==='gym-visitor');assert.equal(returned.activity,'gym');assert.ok(distance(returned,other.station('gym'))<70);
 });
 
+test('a fire truck arrives, gives one all-clear and sends coworkers to their own desks',()=>{
+ const m=fresh();quietRounds(m);m.triggerEvent('fire');const id=m.state.fireResponse.id,deadlines=m.state.tasks.map(t=>t.deadline);
+ tick(m,4);assert.ok(m.state.npcMessages.length);tick(m,5);assert.equal(m.state.fireResponse.stage,'enroute');assert.deepEqual(m.state.tasks.map(t=>t.deadline),deadlines);
+ const complaints=m.state.banter.filter(b=>b.kind==='fire'&&b.speaker!=='Office announcement');assert.ok(complaints.length>=1);
+ assert.equal(new Set(complaints.map(b=>b.speaker)).size,complaints.length);
+ tick(m,2);assert.equal(m.state.fireResponse.stage,'arrived');assert.equal(m.state.fireResponse.progress,1);
+ tick(m,14);assert.equal(m.state.event,null);assert.equal(m.state.fireResponse.id,id);assert.equal(m.state.fireResponse.stage,'cleared');assert.equal(m.state.fireResponse.allClearIssued,true);
+ const clear=m.state.banter.filter(b=>b.kind==='allclear');assert.equal(clear.length,1);assert.equal(clear[0].text,'All clear. Everyone back to your desks, please.');
+ for(const n of m.state.npcs.filter(n=>n.role!=='visitor'&&!n.hidden)){if(n.route.length)assert.ok(distance(n.route.at(-1),m.employeeHome(n))<1);else assert.ok(distance(n,m.employeeHome(n))<50);}
+ quietRounds(m);tick(m,8);assert.equal(m.state.fireResponse,null);assert.equal(m.state.banter.filter(b=>b.kind==='allclear').length,1);
+ tick(m,40);for(const n of m.state.npcs.filter(n=>n.role!=='visitor'&&!n.hidden))assert.ok(distance(n,m.employeeHome(n))<80);
+});
+
+test('early roll call departs from the current truck position and cannot replay a stale all-clear',()=>{
+ const m=fresh();quietRounds(m);m.triggerEvent('fire');tick(m,3);const first=m.state.fireResponse.eventId,progress=m.state.fireResponse.progress;
+ m.finishEvent(true);assert.equal(m.state.fireResponse.stage,'departing');assert.equal(m.state.fireResponse.departureStartProgress,progress);assert.equal(m.state.fireResponse.allClearIssued,false);
+ tick(m,7);assert.equal(m.state.fireResponse,null);assert.equal(m.state.banter.filter(b=>b.kind==='allclear').length,0);
+ assert.equal(m.triggerEvent('fire'),true);assert.notEqual(m.state.fireResponse.eventId,first);assert.equal(m.state.fireResponse.complaintIndex,0);assert.equal(m.state.fireResponse.progress,0);
+});
+
+test('paused saves and floor edits retain fire truck progress without repeating complaints',()=>{
+ const m=fresh();quietRounds(m);m.triggerEvent('fire');tick(m,12);const saved=m.serialize(),next=new GameModel();assert.equal(next.restore(saved),true);
+ const before=structuredClone(next.state.fireResponse),ids=next.state.banter.map(b=>b.id);tick(next,3);assert.deepEqual(next.state.fireResponse,before);
+ const layout=cloneLayout(next.state.layout);layout.stations.find(s=>s.id==='assembly').x-=20;assert.equal(next.setLayout(layout).ok,true);assert.deepEqual(next.state.fireResponse,before);assert.deepEqual(next.state.banter.map(b=>b.id),ids);
+ assert.ok(next.state.managers.every(a=>a.activity==='evacuating'&&a.route.length));for(let i=0;i<5;i++)next.ensureOfficeState();assert.deepEqual(next.state.fireResponse,before);
+ next.setPaused(false);quietRounds(next);tick(next,13);assert.equal(next.state.event,null);assert.equal(next.state.banter.filter(b=>b.kind==='allclear').length,1);
+ const clear=structuredClone(next.state.fireResponse);for(let i=0;i<5;i++)next.ensureOfficeState();assert.deepEqual(next.state.fireResponse,clear);
+});
+
+test('older active-fire saves gain a response at their existing drill age',()=>{
+ const m=fresh();quietRounds(m);m.triggerEvent('fire');tick(m,7);const saved=m.serialize();delete saved.state.fireResponse;
+ const next=new GameModel();assert.equal(next.restore(saved),true);assert.ok(Math.abs(next.state.fireResponse.elapsed-7)<.1);assert.equal(next.state.fireResponse.stage,'enroute');
+ const count=next.state.banter.length;for(let i=0;i<5;i++)next.ensureOfficeState();assert.equal(next.state.banter.length,count);
+ next.setPaused(false);quietRounds(next);tick(next,18);assert.equal(next.state.event,null);assert.equal(next.state.banter.filter(b=>b.kind==='allclear').length,1);
+});
+
+test('clock-out and event expiry cannot leave an active truck or alarm behind',()=>{
+ const m=fresh();quietRounds(m);m.triggerEvent('fire');m.state.remaining=.01;tick(m,.05);assert.equal(m.state.phase,'ended');assert.equal(m.state.fireResponse,null);m.ensureOfficeState();assert.equal(m.state.fireResponse,null);
+ const other=fresh();quietRounds(other);other.triggerEvent('fire');other.state.event.remaining=.01;tick(other,.05);assert.equal(other.state.event,null);assert.equal(other.state.fireResponse.stage,'departing');tick(other,7);assert.equal(other.state.fireResponse,null);
+});
+
 console.log(passed+' office behavior checks passed; '+failed+' failed.');if(failed)process.exitCode=1;

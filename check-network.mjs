@@ -160,6 +160,55 @@ await test('orphaned task locks are reconciled before another player opens the c
   assert.equal(result.results[0].kind, 'task');
   assert.equal((await store.get(a.code)).players[a.playerId].currentTask, task.id);
 });
+await test('the fire truck and all-clear survive SQLite hydration and remain shared without repeated announcements', async () => {
+  const setup = await sqliteStore();
+  try {
+    let now = 1794690000000, service = new RoomService(setup.store, { now: () => now });
+    const a = await service.create({ config: config('Fire host') }), b = await service.join(a.code, { config: config('Fire guest') });
+    let taskId, deadline, patience;
+    await editRoom(setup.store, a.code, record => {
+      const model = new GameModel(record.model.seed); model.state = record.model.state;
+      for (const [key, value] of Object.entries(record.model)) if (key !== 'state' && key !== 'version') model[key] = value;
+      model.ensureOfficeState(); model.eventClock = 999; model.summonClock = 999;
+      Object.assign(model.state.officeRoutines, { roundClock: 999, messClock: 999, coffeeCheckClock: 999, staffClock: 999 });
+      model.state.phoneQueue.arrivalClock = 999; model.receiveCall();
+      const task = model.state.tasks[0]; taskId = task.id; deadline = task.deadline;
+      record.locks[task.id] = a.playerId; record.players[a.playerId].currentTask = task.id;
+      patience = model.state.phoneQueue.calls[0].remaining;
+      assert.equal(model.triggerEvent('fire'), true); record.model = model.serialize();
+    });
+    const sync = async (client, advance = 0) => {
+      now += advance;
+      service = new RoomService(setup.store, { now: () => now });
+      return (await service.sync(a.code, client.playerId, client.token, { commands: [] })).snapshot;
+    };
+    let host = await sync(a), guest = await sync(b);
+    const responseId = host.state.fireResponse.id;
+    assert.equal(host.state.fireResponse.stage, 'enroute');
+    assert.deepEqual(host.state.fireResponse, guest.state.fireResponse);
+    const evacuated = await setup.store.get(a.code);
+    assert.deepEqual(evacuated.locks, {}); assert.ok(Object.values(evacuated.players).every(actor => actor.currentTask === null));
+    for (let poll = 0; poll < 3; poll++) { host = await sync(a, 4000); guest = await sync(b); }
+    assert.equal(host.state.fireResponse.id, responseId); assert.equal(host.state.fireResponse.stage, 'arrived');
+    assert.deepEqual(host.state.fireResponse, guest.state.fireResponse);
+    assert.equal(host.state.tasks.find(task => task.id === taskId).deadline, deadline);
+    assert.equal(host.state.phoneQueue.calls[0].remaining, patience); assert.equal(host.state.phoneQueue.ringing, false);
+    const complaints = host.state.banter.filter(entry => entry.kind === 'fire');
+    assert.ok(complaints.length >= 2); assert.equal(new Set(complaints.map(entry => entry.id)).size, complaints.length);
+    for (const advance of [4000, 4000, 4000, 1000]) { host = await sync(a, advance); guest = await sync(b); }
+    assert.equal(host.state.event, null); assert.equal(host.state.fireResponse.id, responseId);
+    assert.equal(host.state.fireResponse.allClearIssued, true);
+    assert.deepEqual(host.state.fireResponse, guest.state.fireResponse);
+    const allClears = host.state.banter.filter(entry => entry.kind === 'allclear');
+    assert.equal(allClears.length, 1); assert.match(allClears[0].text, /back to your desks/i);
+    assert.equal(host.state.phoneQueue.waiting, 1); assert.equal(host.state.phoneQueue.ringing, true);
+    assert.ok(host.state.phoneQueue.calls[0].remaining < patience && host.state.phoneQueue.calls[0].remaining > patience - 3);
+    const repeated = await sync(a); assert.equal(repeated.state.banter.filter(entry => entry.kind === 'allclear').length, 1);
+    host = await sync(a, 8000); await sync(b);
+    assert.equal(host.state.fireResponse, null); assert.equal(host.state.event, null);
+    assert.equal(host.state.banter.filter(entry => entry.kind === 'allclear').length, 1);
+  } finally { setup.close(); }
+});
 await test('custom floor plans survive room storage and reach every player', async () => {
   const service = new RoomService(new MemoryRoomStore());
   const layout = JSON.parse(JSON.stringify(DEFAULT_LAYOUT)); layout.floorColor = '#efe6dd'; layout.stations[0].x += 20;

@@ -3,7 +3,7 @@ import {OfficeAudio} from './dist/audio.js';
 const fixtures=()=>{
   const spoken=[],nodes=[],saved=new Map();let cancelled=0;
   class Param{value=0;setValueAtTime(v,t){assert.ok(Number.isFinite(v)&&Number.isFinite(t));this.value=v;}setTargetAtTime(v,t,k){assert.ok(Number.isFinite(v)&&Number.isFinite(t)&&k>0);this.value=v;}linearRampToValueAtTime(v,t){this.setValueAtTime(v,t);}exponentialRampToValueAtTime(v,t){assert.ok(v>0);this.setValueAtTime(v,t);}}
-  class Node{constructor(){for(const p of ['frequency','gain','pan','playbackRate','Q'])this[p]=new Param();nodes.push(this);}connect(){}start(t=0){assert.ok(t>=0&&Number.isFinite(t));this.started=true;}stop(){this.stopped=true;this.onended?.();}}
+  class Node{constructor(){for(const p of ['frequency','gain','pan','playbackRate','Q'])this[p]=new Param();nodes.push(this);}connect(){}start(t=0){assert.ok(t>=0&&Number.isFinite(t));this.started=true;}stop(at){this.stopped=true;if(at===undefined){this.cancelled=true;this.onended?.();}}}
   class Context{currentTime=0;sampleRate=100;destination={};state='suspended';createGain(){return new Node();}createOscillator(){return new Node();}createBufferSource(){return new Node();}createBiquadFilter(){return new Node();}createStereoPanner(){return new Node();}createBuffer(_n,size){return{getChannelData:()=>new Float32Array(size)};}async resume(){this.state='running';}async suspend(){this.state='suspended';}async close(){this.state='closed';}}
   const host={document:{hidden:false},AudioContext:Context,SpeechSynthesisUtterance:class{constructor(text){this.text=text;}},speechSynthesis:{getVoices:()=>[{voiceURI:'one',lang:'en-US',name:'One'},{voiceURI:'two',lang:'en-GB',name:'Two'}],addEventListener(){},removeEventListener(){},speak:u=>spoken.push(u),cancel:()=>cancelled++}};
   const audio=new OfficeAudio({host,storage:{getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)},random:()=>.4});
@@ -28,5 +28,17 @@ let passed=0;
 {
   const f=fixtures();f.state.phase='lobby';f.audio.update(f.state,.05);f.audio.preview();f.audio.update(f.state,.05);assert.equal(f.audio.active,true);assert.equal(f.spoken.length,1);f.audio.update(f.state,.05,{quiet:true});assert.equal(f.audio.active,false);f.audio.destroy();
   const a=new OfficeAudio({host:{document:{}},storage:{getItem(){throw Error('Storage blocked');}},random:()=>.5});a.unlock();a.update({phase:'playing',banter:[],player:{}},.05);assert.equal(a.say('Caption fallback'),false);a.destroy();passed++;
+}
+{
+  const f=fixtures();f.audio.unlock();f.audio.update(f.state,.05);
+  f.state.event={id:'fire-a',type:'fire'};f.state.fireResponse={stage:'enroute',progress:.4};
+  f.state.banter=[{id:'fire1',kind:'fire',speaker:'Maya',text:'I just got comfortable. Is this another drill?'}];f.audio.update(f.state,.05);
+  const alarm=[...f.audio.tagged.get('alarm')];assert.equal(alarm.length,6,'One alarm cycle has three distinct dual-tone pulses');assert.equal(f.audio.tagged.get('truck').size,2,'The approaching truck has its own siren');
+  assert.equal(f.spoken.length,1);assert.match(f.spoken[0].text,/another drill/);for(let i=0;i<10;i++)f.audio.update(structuredClone(f.state),.05);assert.equal(f.spoken.length,1,'Complaints must not repeat each poll');
+  f.state.event=null;f.state.fireResponse.stage='cleared';f.state.banter.unshift({id:'clear1',kind:'allclear',speaker:'Firefighter Morgan',text:'All clear. Everyone back to your desks, please.'});f.audio.update(f.state,.05);
+  assert.ok(alarm.every(n=>n.cancelled),'All-clear cancels every pending alarm pulse immediately');assert.equal(f.audio.tagged.has('alarm'),false);assert.equal(f.audio.tagged.has('truck'),false);assert.equal(f.spoken.length,2);assert.equal(f.spoken[1].officeKind,'allclear');f.audio.update(structuredClone(f.state),.05);assert.equal(f.spoken.length,2);f.audio.destroy();passed++;
+}
+{
+  const f=fixtures();f.audio.unlock();f.audio.update(f.state,.05);f.state.event={id:'fire-muted',type:'fire'};f.state.fireResponse={stage:'enroute',progress:.7};f.audio.update(f.state,.05);const alarm=[...f.audio.tagged.get('alarm')];f.audio.set('enabled',false);assert.ok(alarm.every(n=>n.cancelled));assert.equal(f.audio.nodes.size,0);f.audio.update(f.state,.05);assert.equal(f.audio.tagged.size,0);f.audio.destroy();passed++;
 }
 console.log(`${passed} audio checks passed (activation, voices, mute, scheduling, and fallbacks).`);

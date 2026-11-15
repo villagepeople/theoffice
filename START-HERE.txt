@@ -1,4 +1,4 @@
-BENEFITS: AN OFFICE COMEDY — VERSION 2.2
+BENEFITS: AN OFFICE COMEDY — VERSION 2.3
 Upper management needs you.
 
 LOCAL PLAY
@@ -37,6 +37,11 @@ Read all banter is optional. Mute choices are remembered in this browser.
 The gym regular walks out to complain about unanswered calls, then returns.
 Managers inspect coffee, coordinate help, and clean desks while leaving notes.
 Visit your desk and press E to read or file a note.
+
+FIRE DRILLS
+The alarm sounds while coworkers evacuate and complain. A fire truck arrives
+at assembly; the crew gives the all-clear and employees return to their desks.
+Use Mixer to adjust alarms or mute the office.
 
 CONTROLS
 Click to walk or use WASD / arrow keys. E interacts. T opens NPC conversations.

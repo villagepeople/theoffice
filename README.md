@@ -102,6 +102,13 @@ Typing, paper, printers, footsteps, chairs, coffee, and alarms use Web Audio.
 Voices use device speech synthesis; captions stay in Office chatter. Read all
 banter is optional. No microphone, API key, or speech service is required.
 
+## Fire drills
+
+Fire drills have a repeating alarm and voiced employee complaints. A fire truck
+arrives at the assembly area, then a firefighter gives the all-clear. Employees
+return to their own desks and the truck leaves. Mute and Mixer volumes apply to
+alarms as well as other office events.
+
 ## Future direction
 
 Mobile adaptation is deferred. The proposed training mode would give NPCs

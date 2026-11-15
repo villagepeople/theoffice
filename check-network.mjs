@@ -62,7 +62,9 @@ async function exercise(label, store) {
   const unauthorizedDay = await sync(b, [{ type: 'nextDay' }]); assert.equal(unauthorizedDay.results[0].kind, 'blocked');
 
   const joins = await Promise.all([service.join(a.code, { config: config('Casey') }), service.join(a.code, { config: config('Devon') })]);
-  assert.equal((await sync(a)).snapshot.room.players.length, 4);
+  const fullOffice = (await sync(a)).snapshot;
+  assert.equal(fullOffice.room.players.length, 4);
+  assert.deepEqual(fullOffice.room.players.map(p => p.deskSlot).sort(), [0, 1, 2, 3], 'concurrent joins must reserve separate desks');
   await assert.rejects(service.join(a.code, { config: config('Extra') }), e => e.status === 409);
   assert.equal(new Set(joins.map(j => j.playerId)).size, 2);
   response = await sync(a, [{ type: 'leave' }]); assert.equal(response.left, true);
@@ -131,8 +133,14 @@ await test('a fire releases every online case, preserves evacuation routes, and 
   const cleared = await store.get(a.code); assert.deepEqual(cleared.locks, {});
   assert.ok(Object.values(cleared.players).every(p => p.currentTask === null && p.route.length === 0));
   await service.sync(a.code, a.playerId, a.token, { commands: [{ seq: 3, type: 'moveTo', ...point('assembly') }] });
-  now += 8000;
-  const arrived = await service.sync(a.code, a.playerId, a.token, { commands: [] });
+  let arrived;
+  for (let poll = 0; poll < 6; poll++) {
+    now += 4000;
+    arrived = await service.sync(a.code, a.playerId, a.token, { commands: [] });
+    await service.sync(a.code, b.playerId, b.token, { commands: [] });
+    if (Math.hypot(arrived.snapshot.state.player.x - point('assembly').x, arrived.snapshot.state.player.y - point('assembly').y) < 24) break;
+    assert.ok(arrived.snapshot.state.route.length > 0, 'a fire poll erased the unfinished evacuation route');
+  }
   assert.ok(Math.hypot(arrived.snapshot.state.player.x - point('assembly').x, arrived.snapshot.state.player.y - point('assembly').y) < 24, 'fire polls repeatedly erased the evacuation path');
   const resolved = await service.sync(a.code, a.playerId, a.token, { commands: [{ seq: 4, type: 'interact', stationId: 'assembly' }] });
   assert.equal(resolved.snapshot.state.event, null);
@@ -183,6 +191,77 @@ await test('a summoned online guest can respond and NPC conversations use that g
   const talk = await service.sync(a.code, b.playerId, b.token, { commands: [{ seq: 3, type: 'talk', npcId: npc.id, choice: 'greet' }] });
   assert.equal(talk.results[0].kind, 'chat'); assert.equal(talk.results[0].npcId, npc.id); assert.ok(talk.results[0].message);
 });
+async function exercisePersonalDesks(store) {
+  let now = 1794690000000;
+  let service = new RoomService(store, { now: () => now });
+  const a = await service.create({ config: config('Desk host') });
+  const b = await service.join(a.code, { config: config('Desk guest', 'call') });
+  const c = await service.join(a.code, { config: config('Third desk') });
+  const d = await service.join(a.code, { config: config('Fourth desk') });
+  const seq = new Map();
+  const sync = async (client, commands = []) => service.sync(a.code, client.playerId, client.token, { commands: commands.map(command => ({ seq: seq.set(client.playerId, (seq.get(client.playerId) || 0) + 1).get(client.playerId), ...command })) });
+  for (const [slot, client] of [a, b, c, d].entries()) {
+    const snapshot = (await sync(client)).snapshot, player = snapshot.state.player;
+    assert.equal(player.deskSlot, slot); assert.equal(player.deskId, 'desk-player-' + slot);
+    assert.equal(snapshot.state.layout.desks.length, 24);
+    for (const list of [snapshot.state.onlinePlayers, snapshot.state.otherPlayers, snapshot.room.players]) {
+      assert.ok(list.every(p => Number.isInteger(p.deskSlot) && p.deskId === 'desk-player-' + p.deskSlot));
+      assert.equal(new Set(list.map(p => p.deskSlot)).size, list.length);
+    }
+    const model = new GameModel(); model.state = snapshot.state;
+    const desk = model.desks.find(item => item.id === player.deskId), standing = model.point('desk:' + player.deskId);
+    assert.equal(desk.ownerId, player.id); assert.equal(desk.ownerName, player.name);
+    assert.ok(model.isFree(player.x, player.y), 'new coworker spawned inside furniture');
+    assert.ok(Math.hypot(player.x - standing.x, player.y - standing.y) < 2, 'new coworker must arrive beside their own desk');
+    const visited = await sync(client, [{ type: 'interact', stationId: 'desk:' + player.deskId }]);
+    assert.notEqual(visited.results[0].kind, 'blocked');
+  }
+  // A new service instance represents a reconnect or another Worker isolate.
+  service = new RoomService(store, { now: () => now });
+  assert.equal((await sync(c)).snapshot.state.player.deskSlot, 2);
+  await sync(a, [{ type: 'leave' }]);
+  let snapshot = (await sync(b)).snapshot;
+  assert.equal(snapshot.room.hostId, b.playerId); assert.equal(snapshot.state.player.deskSlot, 1);
+  const replacement = await service.join(a.code, { config: config('Replacement') });
+  assert.equal(replacement.snapshot.state.player.deskSlot, 0);
+  await sync(b, [{ type: 'endShift' }]);
+  snapshot = (await sync(b, [{ type: 'nextDay' }])).snapshot;
+  assert.equal(snapshot.state.player.deskSlot, 1);
+  assert.deepEqual(snapshot.room.players.map(p => p.deskSlot).sort(), [0, 1, 2, 3]);
+  const model = new GameModel(); model.state = snapshot.state;
+  for (const player of snapshot.state.onlinePlayers) {
+    assert.ok(model.isFree(player.x, player.y));
+    const standing = model.point('desk:' + player.deskId);
+    assert.ok(Math.hypot(player.x - standing.x, player.y - standing.y) < 2, 'next day must preserve assigned desk and valid arrival');
+  }
+}
+await test('personal desks remain unique through reconnect, host migration, slot reuse, and next day', () => exercisePersonalDesks(new MemoryRoomStore()));
+await test('personal desk reservations survive persisted SQLite room snapshots', async () => {
+  const setup = await sqliteStore(); try { await exercisePersonalDesks(setup.store); } finally { setup.close(); }
+});
+await test('older room records receive stable desks and safe expanded-floor positions', async () => {
+  const store = new MemoryRoomStore(), service = new RoomService(store);
+  const a = await service.create({ config: config('Original host') }), b = await service.join(a.code, { config: config('Original guest') });
+  const record = await store.get(a.code), legacy = cloneLegacyLayout();
+  record.model.state.layout = legacy;
+  for (const actor of Object.values(record.players)) { delete actor.deskSlot; delete actor.player.deskSlot; delete actor.player.deskId; actor.player.x = 505; actor.player.y = 730; actor.route = [{ x: 900, y: 780 }]; }
+  record.revision++; await store.compareAndSwap(a.code, record.revision - 1, record);
+  const first = (await service.sync(a.code, a.playerId, a.token, { commands: [] })).snapshot;
+  const second = (await service.sync(a.code, b.playerId, b.token, { commands: [] })).snapshot;
+  assert.equal(first.state.layout.width, 1600); assert.equal(first.state.layout.height, 1200); assert.equal(first.state.layout.desks.length, 24);
+  assert.equal(first.state.player.deskSlot, 0); assert.equal(second.state.player.deskSlot, 1);
+  const model = new GameModel(); model.state = first.state;
+  for (const player of first.state.onlinePlayers) assert.ok(model.isFree(player.x, player.y));
+  assert.ok(first.state.npcs.filter(n => n.role !== 'visitor').every(n => n.deskId && model.isFree(n.x, n.y)));
+});
+function cloneLegacyLayout() {
+  const legacy = JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
+  legacy.version = 2; legacy.width = 1000; legacy.height = 900; delete legacy.desks; legacy.props = [];
+  legacy.stations.forEach((station, index) => { if (index < 10) { station.x = 100 + index % 5 * 200; station.y = index < 5 ? 300 : 560; } });
+  for (const [id, x, y] of [['coffee', 105, 770], ['gym', 270, 770], ['printer', 430, 770], ['kitchen', 680, 770], ['assembly', 900, 780]]) Object.assign(legacy.stations.find(s => s.id === id), { x, y });
+  legacy.executives.forEach((executive, index) => Object.assign(executive, { x: [180, 500, 820][index], y: 90 }));
+  return legacy;
+}
 await test('HTTP handler rejects foreign origins, invalid JSON, invalid sessions, and giant payloads', async () => {
   const service = new RoomService(new MemoryRoomStore());
   const request = (body, headers = {}) => new Request('https://office.test/api/rooms', { method: 'POST', body, headers: { 'Content-Type': 'application/json', ...headers } });

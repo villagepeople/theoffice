@@ -1,4 +1,5 @@
 import { GameModel, ROLES, OUTFITS, DIFFICULTIES } from '../dist/model.js';
+import { normalizeLayout } from '../dist/layout.js';
 
 const MAX_PLAYERS = 4;
 const ROOM_LIFETIME = 2 * 60 * 60 * 1000;
@@ -26,7 +27,43 @@ function hydrate(record) {
   const model = new GameModel(source.seed);
   model.state = clone(source.state);
   for (const [key, value] of Object.entries(source)) if (key !== 'state' && key !== 'version') model[key] = clone(value);
+  if (model.state.layout?.width !== 1600 || model.state.layout?.height !== 1200 || !Array.isArray(model.state.layout?.desks)) {
+    model.state.layout = normalizeLayout(model.state.layout);
+    model.rehomeNPCs();
+    if (model.state.event) model.applyEventState(model.state.event);
+    for (const actor of Object.values(record.players)) {
+      Object.assign(actor.player, playerDeskPosition(model, actor.player.deskSlot), { walk: false });
+      actor.route = [];
+    }
+    model.state.route = [];
+  }
   return model;
+}
+function ensureDeskSlots(record) {
+  const used = new Set(), unassigned = [];
+  for (const actor of Object.values(record.players)) {
+    const slot = Number.isInteger(actor.deskSlot) ? actor.deskSlot : actor.player.deskSlot;
+    if (Number.isInteger(slot) && slot >= 0 && slot < MAX_PLAYERS && !used.has(slot)) {
+      actor.deskSlot = slot; used.add(slot);
+    } else unassigned.push(actor);
+  }
+  for (const actor of unassigned) {
+    const slot = Array.from({ length: MAX_PLAYERS }, (_, i) => i).find(i => !used.has(i));
+    if (slot === undefined) throw error(409, 'This office already has four coworkers.');
+    actor.deskSlot = slot; used.add(slot);
+  }
+  for (const actor of Object.values(record.players)) {
+    actor.player.deskSlot = actor.deskSlot;
+    actor.player.deskId = 'desk-player-' + actor.deskSlot;
+  }
+}
+function availableDeskSlot(record) {
+  const used = new Set(Object.values(record.players).map(actor => actor.deskSlot));
+  return Array.from({ length: MAX_PLAYERS }, (_, i) => i).find(i => !used.has(i));
+}
+function playerDeskPosition(model, slot) {
+  const point = model.point('desk:desk-player-' + slot) || model.state.player;
+  return model.nearestFree(point.x, point.y);
 }
 function activate(model, actor) { model.state.player = actor.player; model.state.route = actor.route; model.state.currentTask = actor.currentTask; }
 function retain(model, actor) { actor.player = model.state.player; actor.route = model.state.route; actor.currentTask = model.state.currentTask; }
@@ -79,8 +116,10 @@ export class RoomService {
     model.start(config);
     if (input.layout) { const result = model.setLayout?.(input.layout); if (!result?.ok) throw error(400, result?.message || 'This floor plan cannot be used.'); }
     const token = randomHex(24), playerId = randomHex(12);
-    const player = { ...clone(model.state.player), id: playerId };
-    const actor = { id: playerId, tokenHash: await tokenHash(token), player, route: [], currentTask: null, lastSeen: now, lastSeq: 0, lastMotionAt: now, motionCredit: .3, replies: [], chatTimes: [] };
+    const player = { ...clone(model.state.player), ...playerDeskPosition(model, 0), id: playerId, deskSlot: 0, deskId: 'desk-player-0' };
+    model.state.player = player;
+    const actor = { id: playerId, deskSlot: 0, tokenHash: await tokenHash(token), player, route: [], currentTask: null, lastSeen: now, lastSeq: 0, lastMotionAt: now, motionCredit: .3, replies: [], chatTimes: [] };
+    model.state.onlinePlayers = [publicActor(actor)];
     for (let attempt = 0; attempt < 5; attempt++) {
       const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
       const code = [...crypto.getRandomValues(new Uint8Array(8))].map(n => alphabet[n % alphabet.length]).join('');
@@ -110,7 +149,9 @@ export class RoomService {
     if (oldHost && record.hostId && oldHost !== record.hostId) addMessage(record, 'Office', record.players[record.hostId].player.name + ' is now hosting the office.', now, null, 'system');
   }
   advance(record, now) {
+    ensureDeskSlots(record);
     const model = hydrate(record), actors = Object.values(record.players), duration = Math.max(0, Math.min(10, (now - record.updatedAt) / 1000));
+    model.state.onlinePlayers = actors.map(publicActor);
     beginEvacuation(record, model, actors);
     if (actors.length && model.state.phase !== 'ended') {
       model.state.phase = 'playing';
@@ -137,10 +178,11 @@ export class RoomService {
     return this.mutate(code, (record, now) => {
       this.removeAbsent(record, now); const model = this.advance(record, now);
       if (Object.keys(record.players).length >= MAX_PLAYERS) throw error(409, 'This office already has four coworkers.');
-      const spawn = model.nearestFree(model.state.player.x + 35 + Object.keys(record.players).length * 14, model.state.player.y + 15);
-      const player = { ...clone(model.state.player), ...config, ...spawn, id: playerId, stress: 10, walk: false };
-      record.players[playerId] = { id: playerId, tokenHash: hash, player, route: [], currentTask: null, lastSeen: now, lastSeq: 0, lastMotionAt: now, motionCredit: .3, replies: [], chatTimes: [] };
+      const deskSlot = availableDeskSlot(record), spawn = playerDeskPosition(model, deskSlot);
+      const player = { ...clone(model.state.player), ...config, ...spawn, id: playerId, deskSlot, deskId: 'desk-player-' + deskSlot, stress: 10, walk: false };
+      record.players[playerId] = { id: playerId, deskSlot, tokenHash: hash, player, route: [], currentTask: null, lastSeen: now, lastSeq: 0, lastMotionAt: now, motionCredit: .3, replies: [], chatTimes: [] };
       if (!record.hostId) record.hostId = playerId;
+      model.state.onlinePlayers = Object.values(record.players).map(publicActor); record.model = model.serialize();
       addMessage(record, 'Office', player.name + ' joined the team.', now, null, 'system');
       return saved => ({ code: saved.code, playerId, token, snapshot: this.snapshot(saved, playerId) });
     });
@@ -167,7 +209,7 @@ export class RoomService {
         const reply = { seq, ...cleanResult(result) }; results.push(reply); actor.replies.push(reply); actor.replies = actor.replies.slice(-30);
         if (command.type === 'leave' && result?.left) break;
       }
-      record.model = model.serialize();
+      model.state.onlinePlayers = Object.values(record.players).map(publicActor); record.model = model.serialize();
       return saved => ({ snapshot: this.snapshot(saved, playerId), results, ack: actor.lastSeq, left: !saved.players[playerId] });
     });
   }
@@ -184,7 +226,7 @@ export class RoomService {
       if (type === 'endShift') { model.state.remaining = 0; model.update(.01); return { kind: 'event', message: 'The team has clocked out.' }; }
       if (model.state.phase !== 'ended') throw error(409, 'Finish this workday before starting the next.');
       model.nextDay(); record.locks = {};
-      Object.values(record.players).forEach((p, i) => { p.player = { ...clone(model.state.player), name: p.player.name, role: p.player.role, outfit: p.player.outfit, skin: p.player.skin, id: p.id, ...model.nearestFree(model.state.player.x + i * 25, model.state.player.y) }; p.route = []; p.currentTask = null; });
+      Object.values(record.players).forEach(p => { p.player = { ...clone(model.state.player), name: p.player.name, role: p.player.role, outfit: p.player.outfit, skin: p.player.skin, id: p.id, deskSlot: p.deskSlot, deskId: 'desk-player-' + p.deskSlot, ...playerDeskPosition(model, p.deskSlot) }; p.route = []; p.currentTask = null; });
       activate(model, actor); return { kind: 'event', message: 'A fresh workday. Same excellent coworkers.' };
     }
     if (model.state.phase !== 'playing') return { kind: 'blocked', message: 'This workday has ended.' };
@@ -223,7 +265,7 @@ export class RoomService {
     state.otherPlayers = Object.values(record.players).filter(p => p.id !== playerId).map(publicActor);
     state.onlinePlayers = Object.values(record.players).map(publicActor);
     state.tasks = state.tasks.map(task => { delete task.answers; task.lockedBy = record.locks[task.id] || null; return task; });
-    return { state, seed: record.model.seed, elapsed: record.model.elapsed, nextTaskId: record.model.nextTaskId, room: { code: record.code, hostId: record.hostId, playerId, players: Object.values(record.players).map(p => ({ id: p.id, name: p.player.name, role: p.player.role })), chat: clone(record.chat), revision: record.revision, maxPlayers: MAX_PLAYERS } };
+    return { state, seed: record.model.seed, elapsed: record.model.elapsed, nextTaskId: record.model.nextTaskId, room: { code: record.code, hostId: record.hostId, playerId, players: Object.values(record.players).map(p => ({ id: p.id, name: p.player.name, role: p.player.role, deskSlot: p.player.deskSlot, deskId: p.player.deskId })), chat: clone(record.chat), revision: record.revision, maxPlayers: MAX_PLAYERS } };
   }
 }
 

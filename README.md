@@ -20,9 +20,10 @@ Run commands from the repository root.
 
 ## Features
 
-- Ten roles covering benefits, retirement, Flex, COBRA, the call center,
+- Ten roles covering benefits, retirement, Flex, COBRA, Congierge,
   Accounting, MIS Helpdesk, MIS Developers, and Operations.
-- A floor studio with movable departments and executive offices, furniture,
+- A larger floor with 20 assigned staff desks, four player desks, and executive office desks.
+- A floor studio with movable departments, individual employee desks, executive offices, and furniture,
   walkway validation, undo, and JSON floor-plan import/export.
 - Solo play and shared offices for up to four players, with room codes,
   shared cases, events, team chat, and host migration.
@@ -42,6 +43,7 @@ on the current computer; it is not an internet hosting service.
 | Interact | E |
 | Talk to an NPC | T |
 | Team chat | Enter |
+| Go to your desk | My desk button or Office directory |
 | Take a break | Space or Escape |
 
 Solo play pauses during case dialogs. Multiplayer offices continue running.
@@ -87,6 +89,11 @@ The Node preview uses in-memory rooms, which are cleared when it restarts.
 The hosted Worker uses a Cloudflare D1 binding named `DB`; its schema is in
 `drizzle/0000_multiplayer.sql`. The existing Sites deployment workflow provisions
 and migrates that database. See `START-HERE.txt` for the current project details.
+
+## Next version
+
+Manager coffee-freshness rounds, staff coordination, cleanup help, and personal
+desk notes are planned in `NEXT-VERSION.md`. These manager behaviors are not yet implemented.
 
 ## Future direction
 

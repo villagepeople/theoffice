@@ -1,4 +1,4 @@
-BENEFITS: AN OFFICE COMEDY — VERSION 2
+BENEFITS: AN OFFICE COMEDY — VERSION 2.1
 Upper management needs you.
 
 LOCAL PLAY
@@ -6,7 +6,11 @@ Open a terminal in this folder and run node server.mjs.
 Open http://127.0.0.1:4173 in a browser.
 Node.js is required; no dependency installation is needed.
 
-Use Floor studio before opening an online office. Drag departments or executive
+Each of the twenty staff members has a personal desk. Four additional desks are
+reserved for players, with stable ownership in shared offices. Use My desk or
+the Office directory to walk to a desk. Hover over a desk to see who owns it.
+
+Use Floor studio before opening an online office. Drag departments, desks, or executive
 offices, add furniture, rotate pieces, change the floor finish, and save the plan.
 Blocked walkways and overlapping furniture are rejected. Export/import JSON floor
 plans to keep or share designs. Floor preferences are saved on this browser.
@@ -37,9 +41,10 @@ The office directory navigates to every department, shared area, and executive.
 Names can be shown in full, shortened, or hidden. Zoom controls offer a closer view.
 
 CHECKS AND BUILD
-node check-model.mjs    Runs 25 model checks.
-node check-network.mjs  Runs eleven multiplayer integration groups.
-node check-client.mjs   Runs four client recovery checks.
+node check-model.mjs    Runs 30 model checks.
+node check-network.mjs  Runs fourteen multiplayer integration groups.
+node check-client.mjs   Runs five client recovery checks.
+node check-builder.mjs  Runs four floor-builder interaction checks.
 node build-worker.mjs   Bundles the game and API into dist/server/index.js.
 The network checks include concurrent rooms, SQLite persistence, shared cases,
 chat delivery, executive summons, session tokens, and host migration.

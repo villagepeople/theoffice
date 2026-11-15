@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const root = process.cwd();
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
-const stripImports = source => source.replace(/^\s*import[^\r\n]+;[\t ]*/gm, '');
+const stripImports = source => source.replace(/^[\t ]*import[^\r\n]+;[\t ]*(?:\r?\n|$)/gm, '');
 function wrap(name, source, dependency = '') {
   const names = [...source.matchAll(/export\s+(?:async\s+)?(?:const|let|class|function)\s+(\w+)/g)].map(match => match[1]);
   const clean = stripImports(source).replace(/\bexport\s+(?=(?:async\s+)?(?:const|let|class|function)\b)/g, '');
@@ -22,7 +22,7 @@ const worker = await fs.readFile('worker/index.js', 'utf8');
 const layoutNames = [...layout.matchAll(/export\s+(?:async\s+)?(?:const|let|class|function)\s+(\w+)/g)].map(match => match[1]);
 const output = wrap('LayoutModule', layout) +
   wrap('ModelModule', model, 'const {' + layoutNames.join(',') + '} = LayoutModule;') +
-  wrap('RoomModule', rooms, 'const {GameModel,ROLES,OUTFITS,DIFFICULTIES} = ModelModule;') +
+  wrap('RoomModule', rooms, 'const {GameModel,ROLES,OUTFITS,DIFFICULTIES} = ModelModule;const {normalizeLayout} = LayoutModule;') +
   wrap('WorkerModule', worker, 'const {D1RoomStore,RoomService,handleRoomRequest} = RoomModule;') +
   '\nconst GAME_ASSETS = ' + JSON.stringify(assets) + ';\nexport default WorkerModule.createWorker(GAME_ASSETS);\n';
 await fs.mkdir('dist/server', { recursive: true });

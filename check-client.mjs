@@ -26,5 +26,13 @@ try{
     globalThis.fetch=async(_url,init)=>{const body=JSON.parse(init.body);assert.equal(body.commands[0].seq,8);return Response.json({snapshot:snapshot(n),ack:8,results:[{seq:8,kind:'chat',message:'Recovered'}]});};
     await n.sync();assert.equal((await pending).message,'Recovered');n.stop();passed++;
   }
+  {
+    const n=fresh(),guest={id:'departing-guest',name:'Guest QA',deskSlot:1};
+    n.model.state.onlinePlayers=[guest];n.model.state.otherPlayers=[guest];
+    assert.equal(n.model.desks.find(d=>d.id==='desk-player-1').ownerName,'Guest QA');
+    n.stop();
+    assert.equal(n.model.desks.find(d=>d.id==='desk-player-1').ownerId,null);
+    assert.equal(n.model.state.otherPlayers.length,0);passed++;
+  }
   console.log(passed+' client recovery checks passed; 0 failed.');
 }finally{globalThis.fetch=originalFetch;if(originalStorage===undefined)delete globalThis.sessionStorage;else globalThis.sessionStorage=originalStorage;}

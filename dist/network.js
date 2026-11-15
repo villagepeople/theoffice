@@ -83,5 +83,5 @@ export class OfficeNetwork {
     for(const n of s.npcs||[]){if(Number.isFinite(n.targetX)){const k=Math.min(1,dt*12);n.x+=(n.targetX-n.x)*k;n.y+=(n.targetY-n.y)*k;}}
   }
   async leave(){if(this.active){try{await this.enqueue('leave',{},true);}catch{}}this.stop();try{sessionStorage.removeItem(ROOM_KEY);}catch{}}
-  stop(){this.active=false;clearTimeout(this.timer);this.pending=[];for(const w of this.waiters.values()){clearTimeout(w.timer);w.reject(new Error('You left the online office.'));}this.waiters.clear();this.room=null;}
+  stop(){this.active=false;clearTimeout(this.timer);this.pending=[];for(const w of this.waiters.values()){clearTimeout(w.timer);w.reject(new Error('You left the online office.'));}this.waiters.clear();this.room=null;if(this.model?.state){this.model.state.otherPlayers=[];this.model.state.onlinePlayers=[];}}
 }

@@ -1,0 +1,1 @@
+{"name":"benefits-office-comedy","version":"2.0.0","private":true,"type":"module","scripts":{"start":"node server.mjs","build":"node build-worker.mjs","test":"node check-model.mjs && node check-network.mjs && node check-client.mjs"}}

@@ -1,0 +1,67 @@
+BENEFITS: AN OFFICE COMEDY — VERSION 2
+Upper management needs you.
+
+LOCAL PLAY
+Open a terminal in this folder and run node server.mjs.
+Open http://127.0.0.1:4173 in a browser.
+Node.js is required; no dependency installation is needed.
+
+Use Floor studio before opening an online office. Drag departments or executive
+offices, add furniture, rotate pieces, change the floor finish, and save the plan.
+Blocked walkways and overlapping furniture are rejected. Export/import JSON floor
+plans to keep or share designs. Floor preferences are saved on this browser.
+
+ONLINE COOPERATIVE PLAY
+Choose Host office to create a room for up to four players. Use Copy invite or
+share the eight-character room code. Other players choose Join office. Cases,
+events, executive demands, NPCs, and team results are shared.
+
+The preview server stores rooms in memory. Restarting it clears those rooms.
+The hosted Worker uses Cloudflare D1 so rooms survive individual Worker requests.
+Idle players leave presence after 30 seconds. Rooms expire after two hours idle.
+The host controls clock-out and the next shared workday. Hosting transfers if
+the host leaves. Return to online office restores an active browser session.
+
+CHAT AND NPCS
+Office chatter opens three tabs: Overheard, Team, and Talk to NPCs.
+Overheard contains shared office banter, events, and management summons.
+Team messages go only to people in the same online room.
+Walk near an NPC to say hello, offer help, or ask for quiet.
+Optional read-aloud uses the browser's speech feature. It starts turned off.
+
+CONTROLS
+Click to walk or use WASD / arrow keys. E interacts. T opens NPC conversations.
+Enter opens team chat. Space or Escape takes a break.
+Solo play pauses during case dialogs. Online offices keep running.
+The office directory navigates to every department, shared area, and executive.
+Names can be shown in full, shortened, or hidden. Zoom controls offer a closer view.
+
+CHECKS AND BUILD
+node check-model.mjs    Runs 25 model checks.
+node check-network.mjs  Runs eleven multiplayer integration groups.
+node check-client.mjs   Runs four client recovery checks.
+node build-worker.mjs   Bundles the game and API into dist/server/index.js.
+The network checks include concurrent rooms, SQLite persistence, shared cases,
+chat delivery, executive summons, session tokens, and host migration.
+
+HOSTING
+The Sites project is appgprj_6af8d8ee7e788191b9b95f11b02eb6bc.
+The .openai/hosting.json manifest declares the DB binding. The drizzle folder
+contains its schema migration. Publish through the Sites workflow so the database
+is provisioned and migrated before the Worker is released.
+Game URL: https://benefits-and-bedlam-office.vita-8639.chatgpt.site
+
+SOURCE
+dist/model.js       Tasks, movement, office events, executives, conversations
+dist/layout.js      Floor geometry, collision footprints, validation
+dist/renderer.js    Isometric graphics, floating labels, teammates, builder view
+dist/app.js         Controller, player input, task dialogs, room controls
+dist/builder.js     Floor studio interaction and saved layouts
+dist/network.js     Online sessions, command queue, polling, reconnect
+dist/office-chat.js Overheard, team chat, NPC conversations, optional read-aloud
+worker/room-service.js  Authoritative rooms, D1 storage, chat, locks, commands
+worker/index.js     Hosted request routing
+server.mjs         Local preview with the same multiplayer API
+
+This edition is developed for desktop. Mobile adaptation and remote-worker
+gameplay are deferred. All characters, incidents, and client cases are fictional.

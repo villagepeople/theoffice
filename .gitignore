@@ -1,0 +1,14 @@
+node_modules/
+*.tar.gz
+*.zip
+.openai/local*
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+patch-app-v2.mjs
+update-ui-v2.mjs

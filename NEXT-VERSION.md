@@ -1,6 +1,6 @@
-# Next version: managers who help
+# Manager routines — version 2.2
 
-Status: planned. These behaviors are not implemented in the current local release.
+Status: implemented in version 2.2. The list below records the feature scope.
 
 Managers should help keep the office running, alongside their existing requests
 for attention. Every manager role can participate; the jokes should not single

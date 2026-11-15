@@ -6,13 +6,13 @@ const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 const stripImports = source => source.replace(/^[\t ]*import[^\r\n]+;[\t ]*(?:\r?\n|$)/gm, '');
 function wrap(name, source, dependency = '') {
   const names = [...source.matchAll(/export\s+(?:async\s+)?(?:const|let|class|function)\s+(\w+)/g)].map(match => match[1]);
-  const clean = stripImports(source).replace(/\bexport\s+(?=(?:async\s+)?(?:const|let|class|function)\b)/g, '');
+  const clean = stripImports(source.replace(/\r\n?/g, '\n')).replace(/\bexport\s+(?=(?:async\s+)?(?:const|let|class|function)\b)/g, '');
   return 'const ' + name + ' = (() => {\n' + dependency + '\n' + clean + '\nreturn {' + names.join(',') + '};\n})();\n';
 }
 const assets = {};
 for (const entry of await fs.readdir(path.join(root, 'dist'), { withFileTypes: true })) {
   if (!entry.isFile() || !types[path.extname(entry.name)] || entry.name.endsWith('.test.html')) continue;
-  assets['/' + entry.name] = { type: types[path.extname(entry.name)], body: await fs.readFile(path.join(root, 'dist', entry.name), 'utf8') };
+  assets['/' + entry.name] = { type: types[path.extname(entry.name)], body: (await fs.readFile(path.join(root, 'dist', entry.name), 'utf8')).replace(/\r\n?/g, '\n') };
 }
 if (!assets['/index.html'] || !assets['/app.js']) throw new Error('The game assets are incomplete.');
 const layout = await fs.readFile('dist/layout.js', 'utf8');

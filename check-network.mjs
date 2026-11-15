@@ -262,6 +262,107 @@ function cloneLegacyLayout() {
   legacy.executives.forEach((executive, index) => Object.assign(executive, { x: [180, 500, 820][index], y: 90 }));
   return legacy;
 }
+async function editRoom(store, code, edit) {
+  const record = await store.get(code), revision = record.revision;
+  edit(record); record.revision++;
+  assert.equal(await store.compareAndSwap(code, revision, record), true);
+}
+async function exerciseOfficeMigration(store) {
+  const now = 1794690000000, service = new RoomService(store, { now: () => now });
+  const a = await service.create({ config: config('Old office host') });
+  const b = await service.join(a.code, { config: config('Old office guest') });
+  await editRoom(store, a.code, record => {
+    for (const field of ['managers', 'coffee', 'deskMesses', 'deskNotes', 'phoneQueue', 'officeRoutines']) delete record.model.state[field];
+  });
+  const first = (await service.sync(a.code, a.playerId, a.token, { commands: [] })).snapshot;
+  assert.equal(first.state.managers.length, 3);
+  assert.ok(first.state.managers.every(manager => Number.isFinite(manager.x) && Number.isFinite(manager.y)));
+  assert.ok(['fresh', 'stale', 'brewing'].includes(first.state.coffee.status));
+  assert.ok(Array.isArray(first.state.deskMesses)); assert.ok(Array.isArray(first.state.deskNotes));
+  assert.equal(first.state.phoneQueue.waiting, 0);
+  const second = (await service.sync(a.code, b.playerId, b.token, { commands: [] })).snapshot;
+  for (const field of ['managers', 'coffee', 'deskMesses', 'deskNotes', 'phoneQueue']) assert.deepEqual(second.state[field], first.state[field], field + ' must not reset for each poll or player');
+  const persisted = await store.get(a.code);
+  assert.deepEqual(persisted.model.state.managers, first.state.managers);
+}
+await test('existing live rooms acquire office routines once and share them across players', () => exerciseOfficeMigration(new MemoryRoomStore()));
+await test('office routine migration survives persisted SQLite snapshots', async () => {
+  const setup = await sqliteStore(); try { await exerciseOfficeMigration(setup.store); } finally { setup.close(); }
+});
+await test('private desk notes are readable only by their owner, including after desk-slot reuse', async () => {
+  const now = 1794690000000, store = new MemoryRoomStore(), service = new RoomService(store, { now: () => now });
+  const a = await service.create({ config: config('Private host') });
+  const b = await service.join(a.code, { config: config('Private guest') });
+  const aSecret = 'Host: please clean up the crumbs beside your monitor.', bSecret = 'Guest: yesterday’s takeaway is still at your desk.';
+  let seq = 0;
+  const syncA = commands => service.sync(a.code, a.playerId, a.token, { commands: commands.map(command => ({ seq: ++seq, ...command })) });
+  await editRoom(store, a.code, record => {
+    record.model.state.deskNotes = [
+      { id: 'note-host-private', deskId: 'desk-player-0', ownerId: a.playerId, author: 'Jordan Rush', text: aSecret, read: false, createdAt: 0 },
+      { id: 'note-guest-private', deskId: 'desk-player-1', ownerId: b.playerId, author: 'Blair Ledger', text: bSecret, read: false, createdAt: 0 },
+      { id: 'note-npc-readable', deskId: 'desk-npc-0', ownerId: 'npc-0', author: 'Pat Sterling', text: 'Thanks for helping keep our kitchen tidy.', read: false, createdAt: 0 }
+    ];
+  });
+  let response = await syncA([]);
+  assert.equal(response.snapshot.state.deskNotes.find(note => note.ownerId === a.playerId).text, aSecret);
+  assert.ok(!JSON.stringify(response).includes(bSecret));
+  assert.equal(response.snapshot.state.deskNotes.find(note => note.ownerId === b.playerId).private, true);
+  assert.equal(response.snapshot.state.deskNotes.find(note => note.ownerId === 'npc-0').text, 'Thanks for helping keep our kitchen tidy.');
+  const guest = await service.sync(a.code, b.playerId, b.token, { commands: [] });
+  assert.equal(guest.snapshot.state.deskNotes.find(note => note.ownerId === b.playerId).text, bSecret);
+  assert.ok(!JSON.stringify(guest).includes(aSecret));
+  await editRoom(store, a.code, record => {
+    const model = new GameModel(); model.state = record.model.state;
+    Object.assign(record.players[a.playerId].player, model.point('desk:desk-player-1'));
+  });
+  response = await syncA([{ type: 'interact', stationId: 'desk:desk-player-1' }, { type: 'dismissNote', noteId: 'note-guest-private' }]);
+  assert.notEqual(response.results[0].kind, 'note'); assert.equal(response.results[1].kind, 'blocked');
+  assert.ok(!JSON.stringify(response).includes(bSecret));
+  assert.equal((await store.get(a.code)).model.state.deskNotes.find(note => note.id === 'note-guest-private').read, false);
+  await editRoom(store, a.code, record => {
+    const model = new GameModel(); model.state = record.model.state;
+    Object.assign(record.players[a.playerId].player, model.point('desk:desk-player-0'));
+  });
+  response = await syncA([{ type: 'interact', stationId: 'desk:desk-player-0' }]);
+  assert.equal(response.results[0].kind, 'note'); assert.equal(response.results[0].note.text, aSecret);
+  assert.equal((await store.get(a.code)).model.state.deskNotes.find(note => note.id === 'note-host-private').read, true);
+  await syncA([{ type: 'dismissNote', noteId: 'note-host-private' }]);
+  assert.ok(!(await store.get(a.code)).model.state.deskNotes.some(note => note.id === 'note-host-private'));
+  await service.sync(a.code, b.playerId, b.token, { commands: [{ seq: 1, type: 'leave' }] });
+  const replacement = await service.join(a.code, { config: config('Replacement guest') });
+  assert.equal(replacement.snapshot.state.player.deskSlot, 1);
+  assert.ok(!JSON.stringify(replacement).includes(bSecret), 'a new owner must not inherit the former owner’s note contents');
+  const replacementRead = await service.sync(a.code, replacement.playerId, replacement.token, { commands: [{ seq: 1, type: 'interact', stationId: 'desk:desk-player-1' }] });
+  assert.notEqual(replacementRead.results[0].kind, 'note'); assert.ok(!JSON.stringify(replacementRead).includes(bSecret));
+});
+await test('a queued phone can be answered while another player holds the Congierge case, without duplicate answers', async () => {
+  const now = 1794690000000, store = new MemoryRoomStore(), service = new RoomService(store, { now: () => now });
+  const a = await service.create({ config: config('Case handler', 'call') });
+  const b = await service.join(a.code, { config: config('Queue helper') });
+  let before, ringId, taskId;
+  await editRoom(store, a.code, record => {
+    const model = new GameModel(record.model.seed); model.state = record.model.state;
+    for (const [key, value] of Object.entries(record.model)) if (key !== 'state' && key !== 'version') model[key] = value;
+    model.ensureOfficeState();
+    const task = model.state.tasks.find(item => item.role === 'call') || model.addTask('call'); taskId = task.id;
+    record.locks[task.id] = a.playerId; record.players[a.playerId].currentTask = task.id;
+    Object.assign(record.players[b.playerId].player, model.point('call'));
+    model.receiveCall(); before = model.state.phoneQueue.answered; ringId = model.state.phoneQueue.ringId;
+    record.model = model.serialize();
+  });
+  const command = { seq: 1, type: 'interact', stationId: 'call' };
+  const answered = await service.sync(a.code, b.playerId, b.token, { commands: [command] });
+  assert.notEqual(answered.results[0].kind, 'blocked'); assert.notEqual(answered.results[0].kind, 'task');
+  assert.equal(answered.snapshot.state.phoneQueue.waiting, 0);
+  assert.equal(answered.snapshot.state.phoneQueue.answered, before + 1);
+  const replay = await service.sync(a.code, b.playerId, b.token, { commands: [command] });
+  assert.equal(replay.snapshot.state.phoneQueue.answered, before + 1);
+  assert.equal(replay.snapshot.state.phoneQueue.ringId, ringId, 'polls and retries must preserve the stable ring identifier');
+  const host = await service.sync(a.code, a.playerId, a.token, { commands: [] });
+  assert.deepEqual(host.snapshot.state.phoneQueue, replay.snapshot.state.phoneQueue);
+  assert.equal(host.snapshot.state.currentTask, taskId);
+  assert.equal((await store.get(a.code)).locks[taskId], a.playerId);
+});
 await test('HTTP handler rejects foreign origins, invalid JSON, invalid sessions, and giant payloads', async () => {
   const service = new RoomService(new MemoryRoomStore());
   const request = (body, headers = {}) => new Request('https://office.test/api/rooms', { method: 'POST', body, headers: { 'Content-Type': 'application/json', ...headers } });

@@ -37,6 +37,10 @@ function hydrate(record) {
     }
     model.state.route = [];
   }
+  // Rooms saved by an older release need the same defaults as a local save.
+  // Use authoritative owners before assigning any new messes or desk notes.
+  model.state.onlinePlayers = Object.values(record.players).map(publicActor);
+  model.ensureOfficeState();
   return model;
 }
 function ensureDeskSlots(record) {
@@ -94,6 +98,15 @@ function addMessage(record, name, content, now, playerId = null, kind = 'player'
 }
 function publicActor(actor) { return { ...clone(actor.player), id: actor.id, name: actor.player.name, role: actor.player.role, connected: true }; }
 function cleanResult(result) { const out = clone(result || {}); if (out.task) delete out.task.answers; return out; }
+function visibleDeskNote(state, note, playerId) {
+  const desk = state.layout?.desks?.find(d => d.id === note.deskId);
+  const ownsDesk = state.onlinePlayers?.some(player => player.id === playerId && player.deskId === note.deskId);
+  const employeeDesk = desk?.kind === 'employee' && state.npcs.some(npc => npc.id === note.ownerId && npc.deskId === note.deskId);
+  if (employeeDesk || (note.ownerId === playerId && ownsDesk)) return note;
+  // Keep the paper marker on a colleague's desk, but never ship its contents.
+  const { id, deskId, ownerId, author, read, createdAt } = note;
+  return { id, deskId, ownerId, author, read, createdAt, private: true };
+}
 
 export class MemoryRoomStore {
   constructor() { this.rooms = new Map(); }
@@ -240,10 +253,18 @@ export class RoomService {
     if (type === 'interact') {
       if (typeof command.stationId !== 'string' || command.stationId.length > 60) throw error(400, 'Invalid interaction.');
       const task = model.state.tasks.find(t => t.role === command.stationId), owner = task && record.locks[task.id];
-      if (owner && owner !== actor.id && model.state.event?.station !== command.stationId) return { kind: 'blocked', message: 'A coworker is already handling this case. Try another desk.' };
+      const answeringPhone = command.stationId === 'call' && model.state.phoneQueue.waiting > 0;
+      if (owner && owner !== actor.id && model.state.event?.station !== command.stationId && !answeringPhone) return { kind: 'blocked', message: 'A coworker is already handling this case. Try another desk.' };
       const result = model.interact(command.stationId);
+      if (result.note && !model.canReadDeskNote(result.note, actor.id)) return { kind: 'blocked', message: 'That note is addressed to your coworker.' };
       if (result.kind === 'task') { if (actor.currentTask && actor.currentTask !== result.task.id) releaseTask(record, actor); record.locks[result.task.id] = actor.id; }
       return result;
+    }
+    if (type === 'dismissNote') {
+      if (typeof command.noteId !== 'string' || command.noteId.length > 80) throw error(400, 'Choose an available desk note.');
+      const note = model.state.deskNotes.find(item => item.id === command.noteId);
+      if (!note || !model.canReadDeskNote(note, actor.id)) return { kind: 'blocked', message: 'That note is not addressed to you.' };
+      return model.dismissNote(command.noteId);
     }
     if (type === 'answer') {
       const task = model.state.tasks.find(t => t.id === command.taskId);
@@ -264,6 +285,7 @@ export class RoomService {
     if (actor) { state.player = clone(actor.player); state.route = clone(actor.route); state.currentTask = actor.currentTask; }
     state.otherPlayers = Object.values(record.players).filter(p => p.id !== playerId).map(publicActor);
     state.onlinePlayers = Object.values(record.players).map(publicActor);
+    state.deskNotes = (state.deskNotes || []).map(note => visibleDeskNote(state, note, playerId));
     state.tasks = state.tasks.map(task => { delete task.answers; task.lockedBy = record.locks[task.id] || null; return task; });
     return { state, seed: record.model.seed, elapsed: record.model.elapsed, nextTaskId: record.model.nextTaskId, room: { code: record.code, hostId: record.hostId, playerId, players: Object.values(record.players).map(p => ({ id: p.id, name: p.player.name, role: p.player.role, deskSlot: p.player.deskSlot, deskId: p.player.deskId })), chat: clone(record.chat), revision: record.revision, maxPlayers: MAX_PLAYERS } };
   }

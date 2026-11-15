@@ -63,6 +63,8 @@ export class OfficeNetwork {
     const previous=this.model.state,next=snapshot.state;
     const oldNPCs=new Map((previous.npcs||[]).map(n=>[n.id,n]));
     for(const npc of next.npcs||[]){const old=oldNPCs.get(npc.id);if(old&&Math.hypot(old.x-npc.x,old.y-npc.y)<90){npc.targetX=npc.x;npc.targetY=npc.y;npc.x=old.x;npc.y=old.y;}}
+    const oldManagers=new Map((previous.managers||[]).map(n=>[n.id,n]));
+    for(const manager of next.managers||[]){const old=oldManagers.get(manager.id);if(old&&Math.hypot(old.x-manager.x,old.y-manager.y)<90){manager.targetX=manager.x;manager.targetY=manager.y;manager.x=old.x;manager.y=old.y;}}
     if(previous.player?.name===next.player?.name&&performance.now()-this.lastMove<500&&Math.hypot(previous.player.x-next.player.x,previous.player.y-next.player.y)<65){
       next.player.serverX=next.player.x;next.player.serverY=next.player.y;next.player.x=previous.player.x;next.player.y=previous.player.y;
     }
@@ -81,6 +83,7 @@ export class OfficeNetwork {
     const s=this.model.state;
     if(!s.currentTask)this.model.follow(s.player,s.route,158,dt);
     for(const n of s.npcs||[]){if(Number.isFinite(n.targetX)){const k=Math.min(1,dt*12);n.x+=(n.targetX-n.x)*k;n.y+=(n.targetY-n.y)*k;}}
+    for(const n of s.managers||[]){if(Number.isFinite(n.targetX)){const k=Math.min(1,dt*12);n.x+=(n.targetX-n.x)*k;n.y+=(n.targetY-n.y)*k;}}
   }
   async leave(){if(this.active){try{await this.enqueue('leave',{},true);}catch{}}this.stop();try{sessionStorage.removeItem(ROOM_KEY);}catch{}}
   stop(){this.active=false;clearTimeout(this.timer);this.pending=[];for(const w of this.waiters.values()){clearTimeout(w.timer);w.reject(new Error('You left the online office.'));}this.waiters.clear();this.room=null;if(this.model?.state){this.model.state.otherPlayers=[];this.model.state.onlinePlayers=[];}}

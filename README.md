@@ -73,6 +73,7 @@ and room API into `dist/server/index.js`.
 | `dist/app.js` | Controller and browser input |
 | `dist/builder.js` | Floor studio |
 | `dist/network.js` | Multiplayer client and reconnect |
+| `dist/audio.js` | Local office sounds and device voice playback |
 | `dist/office-chat.js` | Chatter, team chat, and NPC conversation UI |
 | `worker/room-service.js` | Authoritative multiplayer rooms and persistence |
 | `worker/index.js` | Hosted request routing |
@@ -90,10 +91,16 @@ The hosted Worker uses a Cloudflare D1 binding named `DB`; its schema is in
 `drizzle/0000_multiplayer.sql`. The existing Sites deployment workflow provisions
 and migrates that database. See `START-HERE.txt` for the current project details.
 
-## Next version
+## Office routines and audio
 
-Manager coffee-freshness rounds, staff coordination, cleanup help, and personal
-desk notes are planned in `NEXT-VERSION.md`. These manager behaviors are not yet implemented.
+Managers check coffee freshness, coordinate staff, clean crumbs and trash, and leave
+personal desk notes. Inbound calls ring at Congierge, coworkers request queue help,
+and the gym regular offers unsolicited advice. Check your desk to read or file notes.
+
+Sound defaults on after Clock in. Mixer adjusts room ambience, events, and voices.
+Typing, paper, printers, footsteps, chairs, coffee, and alarms use Web Audio.
+Voices use device speech synthesis; captions stay in Office chatter. Read all
+banter is optional. No microphone, API key, or speech service is required.
 
 ## Future direction
 

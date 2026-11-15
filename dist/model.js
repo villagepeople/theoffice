@@ -52,7 +52,7 @@ gym:{title:'The gym has a very fragrant visitor.',description:'The recurring out
 
 
 export class GameModel{
-constructor(seed=20261114){this.seed=seed>>>0;this.nextTaskId=1;this.nextBanterId=1;this.elapsed=0;this.eventClock=35;this.projectileClock=10;this.summonClock=25;this.banterClock=12;this.state=this.initialState();this.rehomeNPCs();}
+constructor(seed=20261114){this.seed=seed>>>0;this.nextTaskId=1;this.nextBanterId=1;this.elapsed=0;this.eventClock=35;this.projectileClock=10;this.summonClock=25;this.banterClock=12;this.state=this.initialState();this.rehomeNPCs();this.ensureOfficeState();}
 random(){let t=this.seed+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;}
 pick(a){return a[Math.floor(this.random()*a.length)];}
 initialState(){return{phase:'lobby',layout:cloneLayout(DEFAULT_LAYOUT),executives:DEFAULT_LAYOUT.executives.map(e=>({...e,shouting:false,shout:''})),summon:null,onlinePlayers:[],npcMessages:[],banter:[],player:{id:'player',deskSlot:0,deskId:'desk-player-0',x:800,y:1040,name:'New colleague',role:'small',outfit:'disco',skin:'#d6a17c',stress:10,walk:false,heading:1},npcs:this.createNPCs(),stats:{completed:0,satisfaction:90,morale:85,coffee:100},remaining:480,total:480,tasks:[],event:null,log:[],route:[],day:1,projectiles:[],fx:[],currentTask:null,difficulty:'normal',score:0,kitchen:{microwave:'idle',milk:true,crumbs:false},gymBlocked:true};}
@@ -69,7 +69,7 @@ moveTo(x,y){const s=this.state;if(!['playing','lobby'].includes(s.phase)||s.curr
 moveDirection(dx,dy,dt){const s=this.state;if(s.phase!=='playing'||s.currentTask)return;dt=clamp(num(dt),0,.05);const length=Math.hypot(dx,dy);if(!length)return;s.route=[];const p=s.player,speed=158*(p.stress>85?.83:1),mx=dx/length*speed*dt,my=dy/length*speed*dt;if(this.isFree(p.x+mx,p.y))p.x+=mx;if(this.isFree(p.x,p.y+my))p.y+=my;p.walk=true;p.heading=dx<0?-1:dx>0?1:p.heading;}
 follow(entity,route,speed,dt){if(!route?.length){entity.walk=false;return;}const dest=route[0],d=dist(entity,dest),step=speed*dt;if(d<=step+.2){entity.x=dest.x;entity.y=dest.y;route.shift();entity.walk=route.length>0;}else{const nx=entity.x+(dest.x-entity.x)/d*step,ny=entity.y+(dest.y-entity.y)/d*step;if(this.isFree(nx,ny,10)){entity.heading=nx<entity.x?-1:1;entity.x=nx;entity.y=ny;entity.walk=true;}else{route.length=0;entity.walk=false;}}}
 update(dt){dt=clamp(num(dt),0,.05);const s=this.state;if(!dt||s.phase==='paused'||s.phase==='ended')return;this.elapsed+=dt;const p=s.player;this.follow(p,s.route,158*(p.stress>85?.83:1),dt);for(const npc of s.npcs){if(npc.hidden)continue;this.follow(npc,npc.route,52,dt);if(npc.leaving&&!npc.route.length){npc.hidden=true;npc.leaving=false;continue;}if(npc.role==='visitor')continue;this.updateMeeting(npc,dt);npc.idle-=dt;if(!npc.route.length&&npc.idle<=0&&!npc.activity){const home=this.employeeHome(npc),dest=s.event?.type==='fire'?this.assemblyScatter():dist(npc,home)>75?home:this.nearestFree(home.x+(this.random()-.5)*42,home.y+(this.random()-.5)*24);npc.route=this.pathTo(npc,dest.x,dest.y);npc.idle=8+this.random()*15;}npc.mood=npc.stress>65?'grumpy':npc.stress>38?'busy':'calm';}
-s.npcMessages=s.npcMessages.filter(f=>{f.remaining-=dt;return f.remaining>0;});s.fx=s.fx.filter(f=>{f.remaining-=dt;return f.remaining>0;});for(const q of s.projectiles){q.age+=dt;q.x=q.fromX+(q.toX-q.fromX)*Math.min(1,q.age/q.duration);q.y=q.fromY+(q.toY-q.fromY)*Math.min(1,q.age/q.duration);if(q.age>=q.duration&&!q.hit){q.hit=true;if(dist(p,q)<65&&s.phase==='playing'){p.stress=clamp(p.stress+3,0,100);this.log('A paper ball has entered the conversation.','warn');}}}s.projectiles=s.projectiles.filter(q=>q.age<q.duration+.18);if(s.phase==='lobby')return;this.updateExecutive(dt);
+s.npcMessages=s.npcMessages.filter(f=>{f.remaining-=dt;return f.remaining>0;});s.fx=s.fx.filter(f=>{f.remaining-=dt;return f.remaining>0;});for(const q of s.projectiles){q.age+=dt;q.x=q.fromX+(q.toX-q.fromX)*Math.min(1,q.age/q.duration);q.y=q.fromY+(q.toY-q.fromY)*Math.min(1,q.age/q.duration);if(q.age>=q.duration&&!q.hit){q.hit=true;if(dist(p,q)<65&&s.phase==='playing'){p.stress=clamp(p.stress+3,0,100);this.log('A paper ball has entered the conversation.','warn');}}}s.projectiles=s.projectiles.filter(q=>q.age<q.duration+.18);if(s.phase==='lobby')return;this.updateOffice(dt);this.updateExecutive(dt);
 s.remaining=Math.max(0,s.remaining-dt);const fire=s.event?.type==='fire';if(!fire){for(const t of s.tasks)t.deadline-=dt;for(const t of s.tasks.filter(t=>t.deadline<=0)){s.tasks=s.tasks.filter(q=>q.id!==t.id);if(s.currentTask===t.id)s.currentTask=null;s.stats.satisfaction=clamp(s.stats.satisfaction-8,0,100);p.stress=clamp(p.stress+7,0,100);this.log(t.client+' needed more attention. A case timed out.','warn');this.addTask();}}
 s.stats.coffee=Math.max(0,s.stats.coffee-dt*.14);s.stats.morale=clamp(s.stats.morale+dt*(s.stats.coffee>10?.006:-.065),0,100);p.stress=clamp(p.stress-dt*.11,0,100);this.eventClock-=dt;if(!s.event&&this.eventClock<=0)this.triggerEvent();const event=s.event;if(event){event.remaining-=dt;if(event.type==='coffee')s.stats.morale=Math.max(0,s.stats.morale-dt*.08);if(event.type==='phone'||event.type==='music'){const noisy=s.npcs.find(n=>n.id===event.npcId);if(noisy){if(dist(p,noisy)<160)p.stress=clamp(p.stress+dt*.9,0,100);for(const n of s.npcs)if(n.id!==noisy.id&&dist(n,noisy)<160)n.stress=clamp(n.stress+dt*.7,0,100);}s.stats.morale=clamp(s.stats.morale-dt*.035,0,100);}if(event.type==='microwave'){const k=this.station('kitchen');if(dist(p,k)<190)p.stress=clamp(p.stress+dt*.8,0,100);for(const n of s.npcs)if(dist(n,k)<190)n.stress=clamp(n.stress+dt*.6,0,100);}if(event.type==='crumbs')s.stats.morale=clamp(s.stats.morale-dt*.045,0,100);if(event.remaining<=0)this.finishEvent(false);}
 
@@ -78,15 +78,16 @@ if(s.remaining<=0){s.phase='ended';s.currentTask=null;s.route=[];s.score=Math.ro
 interact(stationId){const s=this.state;if(s.phase!=='playing')return{kind:'none'};if(stationId.startsWith('npc:')){const npc=s.npcs.find(n=>n.id===stationId.slice(4));if(!npc||npc.hidden)return{kind:'none'};if(dist(s.player,npc)>110)return{kind:'blocked',message:'Get a little closer to '+npc.name+'.'};if(s.event?.npcId===npc.id){this.finishEvent(true);return{kind:'event',message:'A polite request. A quieter office. Everybody wins.'};}return this.talkTo(npc.id,'greet');}
 if(stationId.startsWith('desk:'))return this.interactDesk(stationId.slice(5));if(stationId.startsWith('exec:'))return this.interactExecutive(stationId.slice(5));const st=this.station(stationId);if(!st)return{kind:'none'};if(dist(s.player,this.point(stationId))>110){this.moveTo(this.point(stationId).x,this.point(stationId).y);return{kind:'blocked',message:'Walking to '+st.label+'…'};}if(s.event&&(s.event.station===stationId||stationId==='operations'&&['phone','music','gym','microwave','milk','crumbs','fight'].includes(s.event.type))){const label=s.event.actionLabel;this.finishEvent(true);return{kind:'event',message:label+' — done!'};}if(s.event?.type==='fire')return{kind:'blocked',message:'Head to the assembly point for the fire drill.'};
 if(stationId==='gym'){if(s.gymBlocked){this.clearGym();s.stats.morale=clamp(s.stats.morale+5,0,100);this.log('The visitor moved on. Your office gym belongs to the office again.','good');return{kind:'event',message:'The gym regular has moved on. You can finally use the equipment.'};}s.player.stress=clamp(s.player.stress-25,0,100);this.log('A quick workout. Stress −25.','good');return{kind:'coffee',message:'A little movement, a clearer head. Stress reduced.'};}
-if(stationId==='kitchen'){s.kitchen={microwave:'idle',milk:true,crumbs:false};s.stats.morale=clamp(s.stats.morale+3,0,100);return{kind:'chat',message:'A clean counter, fresh milk, and a quiet microwave. Beautiful.'};}if(stationId==='coffee'){const milk=s.kitchen.milk;if(s.stats.coffee<45){s.stats.coffee=milk?100:65;s.stats.morale=clamp(s.stats.morale+5,0,100);}const relief=milk?22:10;s.player.stress=clamp(s.player.stress-relief,0,100);this.log(milk?'A fresh coffee and a deep breath. Stress −22.':'Black coffee it is. The empty milk carton is not helping.','good');return{kind:'coffee',message:milk?'Coffee restored. You feel considerably more employable.':'Coffee helps, but fresh milk would help more. Visit the kitchen.'};}if(stationId==='printer')return{kind:'chat',message:'The printer is behaving. Suspicious, but welcome.'};if(stationId==='assembly')return{kind:'chat',message:'A quiet moment outside. Nothing is on fire.'};if(s.event?.type==='portal'&&stationId==='large')return{kind:'blocked',message:'The portal is offline. MIS Helpdesk can find a workaround.'};const task=s.tasks.find(t=>t.role===stationId);if(task){s.currentTask=task.id;s.route=[];return{kind:'task',task};}s.player.stress=clamp(s.player.stress-3,0,100);return{kind:'chat',message:'No active cases here. Your coworkers appreciate the check-in.'};}
+if(stationId==='call'&&s.phoneQueue?.waiting>0)return this.answerQueuedCall();
+if(stationId==='kitchen'){s.kitchen={microwave:'idle',milk:true,crumbs:false};s.stats.morale=clamp(s.stats.morale+3,0,100);return{kind:'chat',message:'A clean counter, fresh milk, and a quiet microwave. Beautiful.'};}if(stationId==='coffee'){const milk=s.kitchen.milk,stale=s.coffee?.status==='stale';if(s.stats.coffee<45||stale){this.brewFreshCoffee();s.stats.morale=clamp(s.stats.morale+5,0,100);}const relief=milk?22:10;s.player.stress=clamp(s.player.stress-relief,0,100);this.log(milk?'A fresh coffee and a deep breath. Stress −22.':'Black coffee it is. The empty milk carton is not helping.','good');return{kind:'coffee',message:stale?'You replaced the stale pot. Fresh coffee, fresh start.':milk?'Coffee restored. You feel considerably more employable.':'Coffee helps, but fresh milk would help more. Visit the kitchen.'};}if(stationId==='printer')return{kind:'chat',message:'The printer is behaving. Suspicious, but welcome.'};if(stationId==='assembly')return{kind:'chat',message:'A quiet moment outside. Nothing is on fire.'};if(s.event?.type==='portal'&&stationId==='large')return{kind:'blocked',message:'The portal is offline. MIS Helpdesk can find a workaround.'};const task=s.tasks.find(t=>t.role===stationId);if(task){s.currentTask=task.id;s.route=[];return{kind:'task',task};}s.player.stress=clamp(s.player.stress-3,0,100);return{kind:'chat',message:'No active cases here. Your coworkers appreciate the check-in.'};}
 advanceTask(choiceIndex){const s=this.state,t=s.tasks.find(t=>t.id===s.currentTask);if(!t||!['playing','paused'].includes(s.phase))return{complete:false,message:'Choose a case at its department desk first.'};if(choiceIndex!==undefined&&Number(choiceIndex)!==t.answers[t.step]){t.misses++;s.player.stress=clamp(s.player.stress+4,0,100);t.deadline=Math.max(8,t.deadline-5);return{complete:false,correct:false,message:'That creates more work. Try the choice that helps the client.'};}t.step++;s.player.stress=clamp(s.player.stress+2,0,100);if(t.step<t.steps.length)return{complete:false,correct:true,message:'Good call. On to the next step.'};const bonus=t.role===s.player.role;s.stats.completed++;s.stats.satisfaction=clamp(s.stats.satisfaction+(bonus?5:3),0,100);s.stats.morale=clamp(s.stats.morale+2,0,100);s.player.stress=clamp(s.player.stress-(bonus?8:4),0,100);s.score+=bonus?180:150;for(const n of s.npcs)if(n.role===t.role)n.stress=Math.max(0,n.stress-12);this.log(t.client+' is sorted. '+(bonus?'Department expertise bonus!':'Another happy client.'),'good');s.fx.push({type:'success',x:s.player.x,y:s.player.y,remaining:1.8,text:'+1 case'});s.tasks=s.tasks.filter(q=>q.id!==t.id);s.currentTask=null;this.addTask();return{complete:true,correct:true,message:bonus?'Case closed. Expertise bonus earned!':'Case closed. Nicely handled.'};}
 closeTask(){this.state.currentTask=null;}
 setPaused(value){if(value&&this.state.phase==='playing')this.state.phase='paused';else if(!value&&this.state.phase==='paused')this.state.phase='playing';return this.state.phase;}
-clearGym(){const s=this.state;s.gymBlocked=false;const n=s.npcs.find(n=>n.id==='gym-visitor');if(n){n.activity=null;n.leaving=true;n.route=this.pathTo(n,this.station('assembly').x+55,this.station('assembly').y+40);if(!n.route.length)n.hidden=true;}}
+clearGym(){const s=this.state;s.gymBlocked=false;const n=s.npcs.find(n=>n.id==='gym-visitor');if(n){n.activity=null;n.officeOuting=null;n.leaving=true;n.route=this.pathTo(n,this.station('assembly').x+55,this.station('assembly').y+40);if(!n.route.length)n.hidden=true;}}
 
-applyEventState(e){const s=this.state;if(e.type==='coffee')s.stats.coffee=0;if(e.type==='microwave')s.kitchen.microwave='beeping';if(e.type==='milk')s.kitchen.milk=false;if(e.type==='crumbs')s.kitchen.crumbs=true;if(e.type==='gym'){s.gymBlocked=true;const n=s.npcs.find(n=>n.id==='gym-visitor');if(n){n.hidden=false;n.leaving=false;n.x=this.station('gym').x;n.y=this.station('gym').y+40;n.route=[];n.activity='gym';}}if(e.type==='phone'||e.type==='music'){let n=s.npcs.find(n=>n.id===e.npcId&&n.role!=='visitor');if(!n)n=this.pick(s.npcs.filter(n=>n.role!=='visitor'));e.npcId=n.id;n.activity=e.type;n.route=[];n.walk=false;}if(e.type==='fight'){const a=s.npcs.filter(n=>n.role==='operations');e.npcIds=a.map(n=>n.id);for(const n of a){n.activity='fight';n.route=[];n.stress=80;}}if(e.type==='fire'){if(s.summon)this.finishSummon(null);s.currentTask=null;s.route=[];for(const n of s.npcs){if(n.hidden)continue;const p=this.assemblyScatter();n.route=this.pathTo(n,p.x,p.y);n.idle=100;}}}
+applyEventState(e){const s=this.state;if(e.type==='coffee')s.stats.coffee=0;if(e.type==='microwave')s.kitchen.microwave='beeping';if(e.type==='milk')s.kitchen.milk=false;if(e.type==='crumbs'){s.kitchen.crumbs=true;const owner=s.npcs.find(n=>n.id===e.ownerId)||this.pick(s.npcs.filter(n=>n.role!=='visitor'));e.ownerId=owner.id;s.kitchen.crumbsOwnerId=owner.id;s.kitchen.crumbsDeskId=owner.deskId;}if(e.type==='gym'){s.gymBlocked=true;const n=s.npcs.find(n=>n.id==='gym-visitor');if(n){n.hidden=false;n.leaving=false;n.x=this.station('gym').x;n.y=this.station('gym').y+40;n.route=[];n.activity='gym';}}if(e.type==='phone'||e.type==='music'){let n=s.npcs.find(n=>n.id===e.npcId&&n.role!=='visitor');if(!n)n=this.pick(s.npcs.filter(n=>n.role!=='visitor'));e.npcId=n.id;n.activity=e.type;n.route=[];n.walk=false;}if(e.type==='fight'){const a=s.npcs.filter(n=>n.role==='operations');e.npcIds=a.map(n=>n.id);for(const n of a){n.activity='fight';n.route=[];n.stress=80;}}if(e.type==='fire'){this.interruptOfficeForFire();if(s.summon)this.finishSummon(null);s.currentTask=null;s.route=[];for(const n of s.npcs){if(n.hidden)continue;const p=this.assemblyScatter();n.route=this.pathTo(n,p.x,p.y);n.idle=100;}}}
 triggerEvent(type){const s=this.state;if(s.phase!=='playing'||s.event)return false;const key=EVENTS[type]?type:this.pick(Object.keys(EVENTS)),def=EVENTS[key];s.event={id:'event-'+Math.floor(this.elapsed*1000),type:key,...def,remaining:def.duration};for(const n of s.npcs)if(n.role!=='visitor')n.stress=clamp(n.stress+8,0,100);this.applyEventState(s.event);this.log(def.title,'warn');this.addBanter('Office announcement',def.title,'event');return true;}
-finishEvent(success){const s=this.state,e=s.event;if(!e)return;if(success){s.stats.morale=clamp(s.stats.morale+9,0,100);s.stats.satisfaction=clamp(s.stats.satisfaction+2,0,100);s.player.stress=clamp(s.player.stress-12,0,100);s.score+=75;for(const n of s.npcs)n.stress=Math.max(0,n.stress-15);this.log('Crisis handled: '+e.title,'good');s.fx.push({type:'success',x:s.player.x,y:s.player.y,remaining:1.8,text:'+teamwork'});}else{s.stats.morale=clamp(s.stats.morale-7,0,100);s.player.stress=clamp(s.player.stress+5,0,100);this.log('The office muddled through. A little help would have gone a long way.','warn');}if(e.type==='coffee')s.stats.coffee=s.kitchen.milk?(success?100:40):(success?65:30);if(e.type==='microwave')s.kitchen.microwave='idle';if(e.type==='milk')s.kitchen.milk=true;if(e.type==='crumbs')s.kitchen.crumbs=false;if(e.type==='gym'&&success)this.clearGym();for(const n of s.npcs){if(n.activity==='phone'||n.activity==='music'||n.activity==='fight')n.activity=null;}if(e.type==='fire')for(const n of s.npcs){if(n.role==='visitor'||n.hidden)continue;const p=this.employeeHome(n);n.route=this.pathTo(n,p.x,p.y);n.idle=12;}s.event=null;this.eventClock=SETTINGS[s.difficulty].gap+this.random()*20;}
+finishEvent(success){const s=this.state,e=s.event;if(!e)return;if(success){s.stats.morale=clamp(s.stats.morale+9,0,100);s.stats.satisfaction=clamp(s.stats.satisfaction+2,0,100);s.player.stress=clamp(s.player.stress-12,0,100);s.score+=75;for(const n of s.npcs)n.stress=Math.max(0,n.stress-15);this.log('Crisis handled: '+e.title,'good');s.fx.push({type:'success',x:s.player.x,y:s.player.y,remaining:1.8,text:'+teamwork'});}else{s.stats.morale=clamp(s.stats.morale-7,0,100);s.player.stress=clamp(s.player.stress+5,0,100);this.log('The office muddled through. A little help would have gone a long way.','warn');}if(e.type==='coffee'){s.stats.coffee=s.kitchen.milk?(success?100:40):(success?65:30);if(s.coffee){s.coffee.age=success?0:80;s.coffee.status='fresh';s.coffee.brewId++;}}if(e.type==='microwave')s.kitchen.microwave='idle';if(e.type==='milk')s.kitchen.milk=true;if(e.type==='crumbs'){s.kitchen.crumbs=false;delete s.kitchen.crumbsOwnerId;delete s.kitchen.crumbsDeskId;}if(e.type==='gym'&&success)this.clearGym();for(const n of s.npcs){if(n.activity==='phone'||n.activity==='music'||n.activity==='fight')n.activity=null;}if(e.type==='fire')for(const n of s.npcs){if(n.role==='visitor'||n.hidden)continue;const p=this.employeeHome(n);n.route=this.pathTo(n,p.x,p.y);n.idle=12;}s.event=null;if(e.type==='fire')this.resumeOfficeAfterFire();this.eventClock=SETTINGS[s.difficulty].gap+this.random()*20;}
 nextDay(){const p={...this.state.player},difficulty=this.state.difficulty,layout=this.state.layout;this.state.day++;return this.start({id:p.id,name:p.name,role:p.role,outfit:p.outfit,skin:p.skin,deskSlot:p.deskSlot,difficulty,layout});}
 serialize(){return{version:3,nextBanterId:this.nextBanterId,summonClock:this.summonClock,banterClock:this.banterClock,seed:this.seed,nextTaskId:this.nextTaskId,elapsed:this.elapsed,eventClock:this.eventClock,projectileClock:this.projectileClock,state:JSON.parse(JSON.stringify(this.state))};}
 
@@ -99,7 +100,7 @@ const s=this.state,layout=s?.layout||DEFAULT_LAYOUT,players=s?[...(s.onlinePlaye
 return layoutDesks(layout).map(d=>{const owner=d.kind==='employee'?s?.npcs?.find(n=>n.id===d.ownerId):players.find(p=>Number(p.deskSlot??0)===Number(d.id.slice(-1)));const ownerName=owner?.name||null;return{...d,ownerId:owner?.id||null,ownerName,label:ownerName?ownerName+'\u2019s desk':d.label};});
 }
 employeeHome(npc){const desk=this.desks.find(d=>d.id===(npc.deskId||'desk-'+npc.id));if(desk){const p=deskStandingPoint(desk);return this.nearestFree(p.x,p.y);}const st=this.station(npc.role);return st?this.nearestFree(st.x,st.y+85):this.nearestFree(800,1040);}
-interactDesk(id){const desk=this.desks.find(d=>d.id===id);if(!desk)return{kind:'none'};const p=deskStandingPoint(desk);if(dist(this.state.player,p)>95){this.moveTo(p.x,p.y);return{kind:'blocked',message:'Walking to '+desk.label+'\u2026'};}this.state.route=[];return{kind:'chat',message:desk.ownerId===this.state.player.id?'Your own desk. A little room to collect your thoughts.':desk.ownerName?desk.ownerName+'\u2019s desk. Leave room for them to work and stand.':'An open desk, ready for another teammate.',deskId:id};}
+interactDesk(id){const desk=this.desks.find(d=>d.id===id);if(!desk)return{kind:'none'};const p=deskStandingPoint(desk);if(dist(this.state.player,p)>95){this.moveTo(p.x,p.y);return{kind:'blocked',message:'Walking to '+desk.label+'\u2026'};}this.state.route=[];const note=(this.state.deskNotes||[]).find(n=>n.deskId===id&&this.canReadDeskNote(n));if(note){note.read=true;return{kind:'note',note:{...note},deskId:id,message:'A note from '+note.author+'.'};}return{kind:'chat',message:desk.ownerId===this.state.player.id?'Your own desk. A little room to collect your thoughts.':desk.ownerName?desk.ownerName+'\u2019s desk. Leave room for them to work and stand.':'An open desk, ready for another teammate.',deskId:id};}
 get bounds(){const l=this.state?.layout||DEFAULT_LAYOUT;return{width:l.width,height:l.height};}
 station(id){if(String(id).startsWith('desk:')){const d=this.desks.find(d=>d.id===id.slice(5));return d?{...d,id:'desk:'+d.id,label:d.label}:undefined;}return this.stations.find(s=>s.id===id);}
 point(id){if(String(id).startsWith('desk:')){const d=this.desks.find(d=>d.id===id.slice(5));return d?deskStandingPoint(d):null;}const s=this.station(id);return s?interactionPoint(s):null;}
@@ -111,11 +112,11 @@ Object.assign(s.player,this.nearestFree(s.player.x,s.player.y));s.route=[];
 }
 setLayout(input){
 const result=validateLayout(input);if(!result.valid)return{ok:false,message:result.errors[0],errors:result.errors};
-this.state.layout=normalizeLayout(input);this.state.executives=this.state.layout.executives.map(e=>({...e,shouting:false,shout:''}));this.state.summon=null;this.state.currentTask=null;this.state.npcMessages=[];this.rehomeNPCs();if(this.state.event)this.applyEventState(this.state.event);this.summonClock=25;
+this.state.layout=normalizeLayout(input);this.state.executives=this.state.layout.executives.map(e=>({...e,shouting:false,shout:''}));this.state.summon=null;this.state.currentTask=null;this.state.npcMessages=[];this.rehomeNPCs();this.ensureOfficeState(true);if(this.state.event)this.applyEventState(this.state.event);this.summonClock=25;
 return{ok:true,message:this.state.layout.migrationNotice||'Floor plan saved. Every desk, office, and shared area is reachable.',layout:cloneLayout(this.state.layout)};
 }
 addBanter(speaker,text,kind='banter'){
-const s=this.state;s.banter.unshift({id:'banter-'+this.nextBanterId++,speaker:clean(speaker,40),text:clean(text,240),time:this.elapsed,kind:['banter','summon','event','reply'].includes(kind)?kind:'banter'});s.banter=s.banter.slice(0,40);return s.banter[0];
+const s=this.state;s.banter.unshift({id:'banter-'+this.nextBanterId++,speaker:clean(speaker,40),text:clean(text,240),time:this.elapsed,kind:['banter','summon','event','reply','manager','queue'].includes(kind)?kind:'banter'});s.banter=s.banter.slice(0,40);return s.banter[0];
 }
 updateExecutive(dt){
 const s=this.state,fire=s.event?.type==='fire';
@@ -124,7 +125,7 @@ this.banterClock-=dt;if(this.banterClock<=0){this.banterClock=12+this.random()*8
 }
 triggerSummon(targetId,executiveId){
 const s=this.state;if(s.phase!=='playing'||s.summon||s.event?.type==='fire')return false;
-const e=s.executives.find(e=>e.id===executiveId)||this.pick(s.executives),employees=s.npcs.filter(n=>n.role!=='visitor'&&!n.hidden&&!n.activity),online=Array.isArray(s.onlinePlayers)?s.onlinePlayers.filter(p=>p&&typeof p.id==='string'&&typeof p.name==='string'):[],players=online.length?online:[{...s.player,id:s.player.id||'player'}];
+const requested=s.npcs.find(n=>n.id===targetId);if(requested?.officeAssignment)this.finishOfficeAssignment(requested);const requestedManager=s.managers?.find(m=>m.id===executiveId);if(requestedManager?.activity){if(requestedManager.job?.kind==='coffee'&&s.coffee.status==='brewing')s.coffee.status='stale';this.returnManagerHome(requestedManager);}const available=s.executives.filter(e=>!s.managers?.find(m=>m.id===e.id)?.activity),e=executiveId?s.executives.find(e=>e.id===executiveId):this.pick(available);if(!e){this.summonClock=5;return false;}const employees=s.npcs.filter(n=>n.role!=='visitor'&&!n.hidden&&!n.activity),online=Array.isArray(s.onlinePlayers)?s.onlinePlayers.filter(p=>p&&typeof p.id==='string'&&typeof p.name==='string'):[],players=online.length?online:[{...s.player,id:s.player.id||'player'}];
 let target=employees.find(n=>n.id===targetId)||players.find(p=>p.id===targetId);if(!target)target=this.random()<.36?this.pick(players):this.pick(employees.length?employees:players);
 const type=employees.some(n=>n.id===target.id)?'npc':online.some(p=>p.id===target.id)?'online':'player',shout=clean(target.name,28).toUpperCase()+'! MY OFFICE. NOW!';
 s.summon={id:'summon-'+Math.floor(this.elapsed*1000),executiveId:e.id,targetId:target.id,targetName:clean(target.name,28),targetType:type,remaining:65,duration:65,station:'exec:'+e.id,shout,title:e.title+' needs attention',description:e.name+' is calling '+clean(target.name,28)+' into the '+e.title+' office.'};e.shouting=true;e.shout=shout;
@@ -133,7 +134,7 @@ this.log(e.title+': “'+shout+'”','warn');this.addBanter(e.title+' '+e.name,s
 }
 updateMeeting(n,dt){
 const s=this.state;
-if(n.activity==='summoned'&&!n.route.length){const p=this.point('exec:'+s.summon?.executiveId);if(s.summon?.targetId===n.id&&p&&dist(n,p)<45){n.activity='meeting';n.meetingRemaining=4;this.addBanter(n.name,'I am here. Which entirely urgent spreadsheet are we discussing?','reply');}}
+if(n.activity==='summoned'&&!n.route.length){const p=this.point('exec:'+s.summon?.executiveId);if(s.summon?.targetId===n.id&&p&&dist(n,p)<45&&!s.managers?.find(m=>m.id===s.summon.executiveId)?.activity){n.activity='meeting';n.meetingRemaining=4;this.addBanter(n.name,'I am here. Which entirely urgent spreadsheet are we discussing?','reply');}}
 if(n.activity==='meeting'){n.meetingRemaining-=dt;if(n.meetingRemaining<=0)this.finishSummon(true);}
 }
 finishSummon(success){
@@ -163,6 +164,165 @@ else if(!cooldown){s.player.stress=clamp(s.player.stress-2,0,100);n.lastTalk=thi
 const text=n.name+': '+message;s.npcMessages=[{npcId:n.id,name:n.name,text:message,remaining:6},...s.npcMessages].slice(0,4);this.log(text,'info');this.addBanter(n.name,message,'reply');
 return{kind:'chat',message:text,npcId:n.id,name:n.name,trait:n.trait,relationship:num(n.relationship),options:[{id:'greet',label:'Say hello'},{id:'help',label:'Offer a hand'},{id:'quiet',label:'Ask for quiet'}]};
 }
+ensureOfficeState(resetManagers=false){
+const s=this.state,desks=this.desks,deskIds=new Set(desks.map(d=>d.id));
+const old=s.officeRoutines||{};
+s.officeRoutines={serial:clamp(Math.floor(num(old.serial,1)),1,99999999),roundClock:clamp(num(old.roundClock,8),0,60),messClock:clamp(num(old.messClock,28),0,90),coffeeCheckClock:clamp(num(old.coffeeCheckClock,12),0,90),staffClock:clamp(num(old.staffClock,16),0,90),cursor:clamp(Math.floor(num(old.cursor)),0,2),cleaned:Math.max(0,num(old.cleaned)),coordinated:Math.max(0,num(old.coordinated)),gymCallCooldown:clamp(num(old.gymCallCooldown),0,120),noteCooldowns:old.noteCooldowns&&typeof old.noteCooldowns==='object'?old.noteCooldowns:{}};
+const coffee=s.coffee||{};s.coffee={age:clamp(num(coffee.age,48),0,9999),status:['fresh','stale','brewing'].includes(coffee.status)?coffee.status:'fresh',brewId:Math.max(0,Math.floor(num(coffee.brewId))),checkedAt:num(coffee.checkedAt,-100)};
+if(s.coffee.age>=100&&s.coffee.status==='fresh')s.coffee.status='stale';
+s.deskMesses=(Array.isArray(s.deskMesses)?s.deskMesses:[]).filter(m=>m&&deskIds.has(m.deskId)&&['trash','crumbs'].includes(m.kind)).slice(0,8).map(m=>({id:clean(m.id,64),deskId:m.deskId,ownerId:clean(m.ownerId,64)||null,kind:m.kind,createdAt:num(m.createdAt)}));
+s.deskNotes=(Array.isArray(s.deskNotes)?s.deskNotes:[]).filter(n=>n&&deskIds.has(n.deskId)).slice(0,32).map(n=>({id:clean(n.id,64),deskId:n.deskId,ownerId:clean(n.ownerId,64)||null,author:clean(n.author,60)||'Upper management',text:clean(n.text,360),read:n.read===true,createdAt:num(n.createdAt)}));
+const queue=s.phoneQueue||{},calls=Array.isArray(queue.calls)?queue.calls.filter(c=>c&&typeof c.id==='string').slice(0,4).map(c=>({id:clean(c.id,64),remaining:clamp(num(c.remaining,62),0,90)})):[];
+if(!calls.length&&num(queue.waiting)>0)for(let i=0;i<Math.min(4,Math.floor(queue.waiting));i++)calls.push({id:'call-'+s.officeRoutines.serial++,remaining:62});
+s.phoneQueue={calls,waiting:calls.length,answered:Math.max(0,Math.floor(num(queue.answered))),missed:Math.max(0,Math.floor(num(queue.missed))),ringId:clean(queue.ringId,64)||null,ringing:calls.length>0&&s.event?.type!=='fire',ringAge:clamp(num(queue.ringAge),0,120),arrivalClock:clamp(num(queue.arrivalClock,13),0,90),complaintClock:clamp(num(queue.complaintClock,6),0,45),autoAnswerClock:clamp(num(queue.autoAnswerClock,15),0,45)};
+for(const entry of [...s.deskNotes,...s.deskMesses,...calls]){const suffix=Number(String(entry.id).match(/-(\d+)$/)?.[1]);if(Number.isFinite(suffix))s.officeRoutines.serial=Math.max(s.officeRoutines.serial,suffix+1);}
+const previous=Array.isArray(s.managers)?s.managers:[];
+s.managers=s.executives.map((e,i)=>{const existing=!resetManagers&&previous.find(m=>m.id===e.id),home=this.nearestFree(e.x,e.y+48);if(existing&&this.isFree(existing.x,existing.y,10)){return{...existing,id:e.id,name:e.name,title:e.title,home,route:Array.isArray(existing.route)?existing.route:[],status:clean(existing.status,60)||'Available in office'};}return{id:e.id,name:e.name,title:e.title,...home,home,route:[],walk:false,heading:1,outfit:['power','wizard','disco'][i],skin:['#d6a17c','#99633f','#ecc2a0'][i],activity:null,status:'Available in office',remaining:0,cooldown:8+i*9,job:null};});
+if(resetManagers)for(const n of s.npcs){if(n.officeAssignment){n.officeAssignment=null;if(['queue','support'].includes(n.activity))n.activity=null;}if(n.officeOuting){n.officeOuting=null;if(n.activity==='phone-police')n.activity=s.gymBlocked?'gym':null;}}
+return s;
+}
+officeId(prefix){return prefix+'-'+this.state.officeRoutines.serial++;}
+createDeskMess(deskId,kind='crumbs'){
+const s=this.state,desk=this.desks.find(d=>d.id===deskId);if(!desk?.ownerId||!['crumbs','trash'].includes(kind)||s.deskMesses.length>=8)return null;
+const existing=s.deskMesses.find(m=>m.deskId===deskId&&m.kind===kind);if(existing)return existing;
+const mess={id:this.officeId('mess'),deskId,ownerId:desk.ownerId,kind,createdAt:this.elapsed};s.deskMesses.push(mess);return mess;
+}
+leaveDeskNote(deskId,author,text){
+const s=this.state,desk=this.desks.find(d=>d.id===deskId);if(!desk?.ownerId)return null;
+if(num(s.officeRoutines.noteCooldowns[deskId],-100)<this.elapsed-45){const note={id:this.officeId('note'),deskId,ownerId:desk.ownerId,author:clean(author,60)||'Upper management',text:clean(text,360),read:false,createdAt:this.elapsed};s.deskNotes.unshift(note);s.deskNotes=s.deskNotes.slice(0,32);s.officeRoutines.noteCooldowns[deskId]=this.elapsed;return note;}
+return s.deskNotes.find(n=>n.deskId===deskId&&n.ownerId===desk.ownerId)||null;
+}
+canReadDeskNote(note,playerId=this.state.player.id){
+if(!note)return false;const desk=this.desks.find(d=>d.id===note.deskId);if(!desk||!desk.ownerId||desk.ownerId!==note.ownerId)return false;return desk.kind==='employee'||note.ownerId===playerId;
+}
+dismissNote(noteId){
+const s=this.state,note=s.deskNotes.find(n=>n.id===noteId);if(!note||!this.canReadDeskNote(note))return{kind:'blocked',message:'That note belongs to another colleague.'};
+const point=this.point('desk:'+note.deskId);if(!['playing','paused'].includes(s.phase)||!point||dist(s.player,point)>95)return{kind:'blocked',message:'Return to the desk to put this note away.'};
+s.deskNotes=s.deskNotes.filter(n=>n.id!==note.id);return{kind:'note-dismissed',message:'Note filed. The crumbs remain on notice.'};
+}
+brewFreshCoffee(){
+const s=this.state;s.coffee.age=0;s.coffee.status='fresh';s.coffee.brewId++;s.stats.coffee=s.kitchen.milk?100:65;
+if(s.event?.type==='coffee')this.finishEvent(true);
+}
+receiveCall(){
+const s=this.state,q=s.phoneQueue;if(s.phase!=='playing'||s.event?.type==='fire'||q.calls.length>=4)return false;
+q.calls.push({id:this.officeId('call'),remaining:62});q.waiting=q.calls.length;q.ringId=this.officeId('ring');q.ringing=true;
+if(q.waiting===1){q.ringAge=0;q.complaintClock=4+this.random()*3;q.autoAnswerClock=16;}
+return true;
+}
+answerQueuedCall(employee=null){
+const s=this.state,q=s.phoneQueue;if(s.event?.type==='fire'||!q.calls.length)return{kind:'chat',message:'The phone queue is clear. A rare and beautiful silence.'};
+q.calls.shift();q.waiting=q.calls.length;q.answered++;q.ringing=q.waiting>0;q.ringAge=0;s.stats.satisfaction=clamp(s.stats.satisfaction+1,0,100);s.stats.morale=clamp(s.stats.morale+1,0,100);
+const name=employee?.name||s.player.name;this.log(name+' answered a Congierge call. '+(q.waiting?q.waiting+' still waiting.':'The queue is clear.'),'good');
+if(!employee){s.score+=25;s.player.stress=clamp(s.player.stress-3,0,100);}
+return{kind:'phone',message:q.waiting?'Call handled. '+q.waiting+' caller'+(q.waiting===1?' is':'s are')+' still waiting.':'Call handled. The queue is clear. Your coworkers may now exhale.'};
+}
+assignOfficeSupport(manager=null,kind='queue',taskId=null){
+const s=this.state;if(s.event?.type==='fire')return false;
+if(s.npcs.some(n=>n.officeAssignment?.kind===kind))return false;
+const task=kind==='support'?s.tasks.find(t=>t.id===taskId&&!t.managerSupported):null;
+if(kind==='queue'&&!s.phoneQueue.waiting||kind==='support'&&!task)return false;
+const pool=s.npcs.filter(n=>n.role!=='visitor'&&!n.hidden&&!n.activity&&!n.officeAssignment);
+pool.sort((a,b)=>kind==='queue'?(a.role==='call'?0:1)-(b.role==='call'?0:1)||a.stress-b.stress:(a.role===task?.role?0:1)-(b.role===task?.role?0:1)||a.stress-b.stress);
+const npc=pool[0];if(!npc)return false;
+const target=kind==='queue'?this.employeeHome(npc):this.nearestFree(this.point(task.role).x+40,this.point(task.role).y+24),route=this.pathTo(npc,target.x,target.y);
+if(!route.length&&dist(npc,target)>32)return false;
+npc.activity=kind;npc.route=route;npc.idle=35;npc.officeAssignment={kind,taskId:task?.id||null,target,remaining:kind==='queue'?6:8,elapsed:0,managerId:manager?.id||null};
+if(manager){s.officeRoutines.coordinated++;this.addBanter(manager.title+' '+manager.name,kind==='queue'?npc.name+', please help with the phone queue. The hold music needs a break.':npc.name+', please help '+ROLES.find(r=>r.id===task.role).short+' with that deadline. You have backup.','manager');}
+return npc;
+}
+updateOfficeAssignments(dt){
+const s=this.state;
+for(const npc of s.npcs){const assignment=npc.officeAssignment;if(!assignment)continue;
+assignment.elapsed+=dt;
+if(s.event?.type==='fire'||npc.activity!==assignment.kind||assignment.elapsed>55||assignment.kind==='queue'&&!s.phoneQueue.waiting){this.finishOfficeAssignment(npc);continue;}
+if(npc.route.length)continue;
+if(dist(npc,assignment.target)>36){this.finishOfficeAssignment(npc);continue;}
+assignment.remaining-=dt;if(assignment.remaining>0)continue;
+if(assignment.kind==='queue')this.answerQueuedCall(npc);
+else{const task=s.tasks.find(t=>t.id===assignment.taskId);if(task&&!task.managerSupported){task.managerSupported=true;task.deadline=Math.min(task.totalDeadline+20,task.deadline+16);for(const colleague of s.npcs)if(colleague.role===task.role)colleague.stress=clamp(colleague.stress-9,0,100);s.stats.morale=clamp(s.stats.morale+2,0,100);this.log(npc.name+' helped '+ROLES.find(r=>r.id===task.role).short+' organize the case. A little breathing room earned.','good');}}
+this.finishOfficeAssignment(npc);
+}
+}
+finishOfficeAssignment(npc){
+const old=npc.officeAssignment;npc.officeAssignment=null;if(old&&npc.activity===old.kind)npc.activity=null;
+if(this.state.event?.type!=='fire'){const home=this.employeeHome(npc);npc.route=this.pathTo(npc,home.x,home.y);npc.idle=12;}
+}
+managerDestination(manager,target){
+const destination=this.nearestFree(target.x,target.y),route=this.pathTo(manager,destination.x,destination.y);
+if(!route.length&&dist(manager,destination)>36)return false;manager.route=route;manager.job.target=destination;return true;
+}
+startManagerRound(managerId){
+const s=this.state,r=s.officeRoutines,m=s.managers.find(m=>m.id===managerId)||s.managers.find(m=>!m.activity&&m.cooldown<=0);
+if(!m||m.activity||s.phase!=='playing'||s.event?.type==='fire'||s.summon?.executiveId===m.id)return false;
+const reserved=kind=>s.managers.some(other=>other.job?.kind===kind),mess=s.deskMesses.find(d=>!s.managers.some(other=>other.job?.messId===d.id));
+let job,status,target;
+if((s.coffee.status==='stale'||s.stats.coffee<10||r.coffeeCheckClock<=0)&&!reserved('coffee')){job={kind:'coffee',stage:'travel',remaining:2,elapsed:0};target=this.point('coffee');status='Checking coffee';r.coffeeCheckClock=50;}
+else if(s.kitchen.crumbs&&!reserved('kitchen')){job={kind:'kitchen',stage:'travel',remaining:3,elapsed:0,ownerId:s.kitchen.crumbsOwnerId||null,deskId:s.kitchen.crumbsDeskId||null};target=this.point('kitchen');status='Cleaning kitchen crumbs';}
+else if(mess){job={kind:'desk',stage:'travel',remaining:3,elapsed:0,messId:mess.id,deskId:mess.deskId,ownerId:mess.ownerId,messKind:mess.kind};target=this.point('desk:'+mess.deskId);status='Cleaning '+mess.kind;}
+else if(r.staffClock<=0&&!reserved('coordinate')&&!s.npcs.some(n=>n.officeAssignment)){const task=[...s.tasks].filter(t=>!t.managerSupported).sort((a,b)=>a.deadline-b.deadline)[0];if(!s.phoneQueue.waiting&&!task)return false;job={kind:'coordinate',stage:'travel',remaining:2,elapsed:0,taskId:task?.id||null,supportKind:s.phoneQueue.waiting?'queue':'support'};target=this.point(s.phoneQueue.waiting?'call':task.role);status='Coordinating staff';r.staffClock=35;}
+if(!job)return false;m.job=job;m.activity=job.kind;m.status=status;m.remaining=job.remaining;
+if(!this.managerDestination(m,target)){this.returnManagerHome(m);return false;}r.cursor=(s.managers.indexOf(m)+1)%3;return m;
+}
+returnManagerHome(m){
+m.activity='returning';m.status='Returning to office';m.job={kind:'return',stage:'travel',target:m.home,elapsed:0,remaining:0};m.route=this.pathTo(m,m.home.x,m.home.y);m.cooldown=16+this.random()*15;
+}
+completeManagerJob(m){
+const s=this.state,job=m.job;if(!job)return;
+if(job.kind==='coffee'){
+s.coffee.checkedAt=this.elapsed;
+if((s.coffee.status==='stale'||s.stats.coffee<10)&&job.stage!=='brewing'){s.coffee.status='brewing';s.coffee.brewId++;job.stage='brewing';job.remaining=5;m.status='Brewing fresh coffee';this.addBanter(m.title+' '+m.name,'This coffee has been here long enough to request benefits. I am making a fresh pot.','manager');return;}
+if(job.stage==='brewing'){this.brewFreshCoffee();s.stats.morale=clamp(s.stats.morale+4,0,100);this.log(m.title+' made a fresh pot of coffee. Management has delivered a tangible benefit.','good');}
+}else if(job.kind==='desk'){
+const mess=s.deskMesses.find(d=>d.id===job.messId);if(mess){s.deskMesses=s.deskMesses.filter(d=>d.id!==mess.id);s.officeRoutines.cleaned++;s.stats.morale=clamp(s.stats.morale+2,0,100);const desk=this.desks.find(d=>d.id===mess.deskId);if(desk?.ownerId===mess.ownerId)this.leaveDeskNote(mess.deskId,m.title+' '+m.name,mess.kind==='crumbs'?'I cleared the crumbs. Your keyboard has declined the remaining snacks. Please give the counter the same consideration.':'Trash handled. The bin is accepting new submissions all afternoon. Please send your next contribution there.');}
+}else if(job.kind==='kitchen'){
+if(s.kitchen.crumbs){s.kitchen.crumbs=false;delete s.kitchen.crumbsOwnerId;delete s.kitchen.crumbsDeskId;s.officeRoutines.cleaned++;s.stats.morale=clamp(s.stats.morale+3,0,100);if(s.event?.type==='crumbs')this.finishEvent(true);const owner=this.desks.find(d=>d.id===job.deskId&&d.ownerId===job.ownerId);if(owner){job.kind='deliver';job.stage='travel';job.remaining=1;job.text='The kitchen counter is clean again. Please let it enjoy a brief retirement before your next toast adventure.';m.activity='delivering';m.status='Leaving a desk note';if(this.managerDestination(m,this.point('desk:'+owner.id)))return;}else this.log(m.title+' cleaned the shared kitchen counter. Its next visitor has a fresh start.','good');}
+}else if(job.kind==='deliver'){
+const desk=this.desks.find(d=>d.id===job.deskId);if(desk?.ownerId===job.ownerId)this.leaveDeskNote(job.deskId,m.title+' '+m.name,job.text);
+}else if(job.kind==='coordinate')this.assignOfficeSupport(m,s.phoneQueue.waiting?'queue':job.supportKind,job.taskId);
+this.returnManagerHome(m);
+}
+interruptOfficeForFire(){
+const s=this.state;if(!s.managers)this.ensureOfficeState();
+for(const n of s.npcs){if(n.officeAssignment){n.officeAssignment=null;if(['queue','support'].includes(n.activity))n.activity=null;}if(n.officeOuting){n.officeOuting=null;if(n.activity==='phone-police')n.activity=s.gymBlocked?'gym':null;}}
+for(const m of s.managers){m.job=null;m.activity='evacuating';m.status='Heading to assembly';const target=this.assemblyScatter();m.route=this.pathTo(m,target.x,target.y);}
+if(s.coffee.status==='brewing')s.coffee.status=s.coffee.age>=100?'stale':'fresh';s.phoneQueue.ringing=false;
+}
+resumeOfficeAfterFire(){
+for(const m of this.state.managers)this.returnManagerHome(m);const visitor=this.state.npcs.find(n=>n.id==='gym-visitor');if(visitor&&!visitor.hidden&&!visitor.leaving&&this.state.gymBlocked){const gym=this.station('gym'),home=this.nearestFree(gym.x,gym.y+45);visitor.route=this.pathTo(visitor,home.x,home.y);visitor.activity='gym';visitor.officeOuting=null;}this.state.phoneQueue.ringing=this.state.phoneQueue.waiting>0;this.state.officeRoutines.roundClock=8;
+}
+updateGymPhonePolice(dt){
+const s=this.state,r=s.officeRoutines,n=s.npcs.find(n=>n.id==='gym-visitor');r.gymCallCooldown=Math.max(0,r.gymCallCooldown-dt);
+if(!n||n.hidden||n.leaving||!s.gymBlocked){if(n)n.officeOuting=null;return;}
+const outing=n.officeOuting;
+if(!outing){if(s.phoneQueue.waiting&&r.gymCallCooldown<=0&&n.activity==='gym'){const call=this.point('call'),target=this.nearestFree(call.x+125,call.y+35),route=this.pathTo(n,target.x,target.y);if(route.length){n.route=route;n.activity='phone-police';n.officeOuting={stage:'out',target,remaining:5,elapsed:0};r.gymCallCooldown=85;}}return;}
+outing.elapsed+=dt;
+const goBack=()=>{const gym=this.station('gym'),target=this.nearestFree(gym.x,gym.y+45);n.route=this.pathTo(n,target.x,target.y);outing.stage='back';outing.target=target;};
+if(outing.stage==='out'&&(!s.phoneQueue.waiting||outing.elapsed>30)){goBack();return;}
+if(n.route.length)return;
+if(outing.stage==='out'){
+if(dist(n,outing.target)>45){goBack();return;}
+outing.stage='lecture';this.addBanter(n.name,'Could one of you actual employees pick up the phone? Some of us are trying to work out.','queue');s.npcMessages=[{npcId:n.id,name:n.name,text:'Could one of you actual employees pick up the phone?',remaining:6},...s.npcMessages].slice(0,4);
+}else if(outing.stage==='lecture'){outing.remaining-=dt;if(outing.remaining<=0||!s.phoneQueue.waiting)goBack();}
+else{n.officeOuting=null;n.activity='gym';n.walk=false;}
+}
+updateOffice(dt){
+const s=this.state;if(!s.officeRoutines)this.ensureOfficeState();const r=s.officeRoutines,q=s.phoneQueue,fire=s.event?.type==='fire';
+for(const m of s.managers){this.follow(m,m.route,78,dt);if(fire)continue;m.cooldown=Math.max(0,num(m.cooldown)-dt);const job=m.job;if(!job)continue;job.elapsed+=dt;if(job.kind==='return'){if(!m.route.length){Object.assign(m,m.home);m.job=null;m.activity=null;m.status='Available in office';m.walk=false;}continue;}if(job.elapsed>85){if(s.coffee.status==='brewing'&&job.kind==='coffee')s.coffee.status='stale';this.returnManagerHome(m);continue;}if(m.route.length)continue;if(dist(m,job.target)>40){this.returnManagerHome(m);continue;}job.remaining-=dt;m.remaining=Math.max(0,job.remaining);if(job.remaining<=0)this.completeManagerJob(m);}
+if(fire)return;
+s.coffee.age+=dt;if(s.coffee.age>=100&&s.coffee.status==='fresh')s.coffee.status='stale';
+if(s.coffee.status==='stale')s.stats.morale=clamp(s.stats.morale-dt*.012,0,100);
+if(s.deskMesses.length)s.stats.morale=clamp(s.stats.morale-dt*.006*s.deskMesses.length,0,100);
+r.roundClock-=dt;r.messClock-=dt;r.coffeeCheckClock-=dt;r.staffClock-=dt;
+if(r.roundClock<=0){r.roundClock=7;for(let i=0;i<3;i++){const m=s.managers[(r.cursor+i)%3];if(!m.activity&&m.cooldown<=0&&this.startManagerRound(m.id))break;}}
+if(r.messClock<=0){r.messClock=38+this.random()*22;const desk=this.pick(this.desks.filter(d=>d.ownerId));if(desk)this.createDeskMess(desk.id,this.random()<.6?'crumbs':'trash');}
+q.arrivalClock-=dt;if(q.arrivalClock<=0){q.arrivalClock=24+this.random()*16;this.receiveCall();}
+if(q.waiting){q.ringAge+=dt;q.complaintClock-=dt;q.autoAnswerClock-=dt;for(const call of q.calls)call.remaining-=dt;
+const expired=q.calls.filter(call=>call.remaining<=0);if(expired.length){q.calls=q.calls.filter(call=>call.remaining>0);q.missed+=expired.length;q.waiting=q.calls.length;s.stats.satisfaction=clamp(s.stats.satisfaction-expired.length,0,100);this.log('A caller left the queue. Congierge could use another pair of hands.','warn');}
+if(q.complaintClock<=0&&q.waiting){q.complaintClock=22+this.random()*10;const speaker=this.pick(s.npcs.filter(n=>n.role==='call'));this.addBanter(speaker.name,this.pick(['Could someone join the phone queue? My headset and I would like separate lunch breaks.','Can somebody get into the queue? I answered the last one, and the one before that.','There are callers waiting! Please log into the queue before the hold music files a complaint.','Who is available for the phone queue? I can hear everyone pretending not to hear it.']),'queue');}
+if(q.autoAnswerClock<=0&&q.waiting){q.autoAnswerClock=16;this.assignOfficeSupport(null,'queue');}}
+q.ringing=q.waiting>0;this.updateOfficeAssignments(dt);this.updateGymPhonePolice(dt);
+}
 restore(input){
 const previous=this.state;
 try{
@@ -175,8 +335,9 @@ const player={...this.state.player};
 this.setLayout(layout);
 this.state.player.id=clean(data.state.player.id,64)||'player';
 const restoredPoint=oldVersion?this.point('desk:'+this.state.player.deskId):player;Object.assign(this.state.player,this.nearestFree(restoredPoint.x,restoredPoint.y));
-this.state.banter=Array.isArray(data.state.banter)?data.state.banter.slice(0,40).filter(b=>b&&typeof b==='object').map(b=>({id:clean(b.id,64),speaker:clean(b.speaker,40),text:clean(b.text,240),time:num(b.time),kind:['banter','summon','event','reply'].includes(b.kind)?b.kind:'banter'})):[];
+this.state.banter=Array.isArray(data.state.banter)?data.state.banter.slice(0,40).filter(b=>b&&typeof b==='object').map(b=>({id:clean(b.id,64),speaker:clean(b.speaker,40),text:clean(b.text,240),time:num(b.time),kind:['banter','summon','event','reply','manager','queue'].includes(b.kind)?b.kind:'banter'})):[];
 if(savedEvent&&EVENTS[savedEvent.type]){const definition=EVENTS[savedEvent.type];this.state.event={id:clean(savedEvent.id,64)||'restored-event',type:savedEvent.type,...definition,remaining:clamp(num(savedEvent.remaining,definition.duration),1,definition.duration),npcId:clean(savedEvent.npcId,64)};this.applyEventState(this.state.event);}
+for(const key of ['coffee','deskMesses','deskNotes','phoneQueue','officeRoutines'])if(data.state[key]&&typeof data.state[key]==='object')this.state[key]=JSON.parse(JSON.stringify(data.state[key]));this.ensureOfficeState(true);if(this.state.coffee.status==='brewing')this.state.coffee.status=this.state.coffee.age>=100?'stale':'fresh';
 this.nextBanterId=clamp(num(data.nextBanterId,100),1,9999999);this.summonClock=clamp(num(data.summonClock,25),5,90);this.banterClock=clamp(num(data.banterClock,12),1,25);return true;
 }catch{this.state=previous;return false;}
 }

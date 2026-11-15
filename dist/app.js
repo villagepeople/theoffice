@@ -3,6 +3,7 @@ import {OfficeView} from './renderer.js';
 import {OfficeNetwork} from './network.js';
 import {FloorBuilder} from './builder.js';
 import {OfficeChat} from './office-chat.js';
+import {OfficeAudio} from './audio.js';
 import {interactionPoint,deskStandingPoint} from './layout.js';
 const $=id=>document.getElementById(id);
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -25,6 +26,7 @@ async function action(type,payload={}){
   if(type==='interact')return model.interact(payload.stationId);
   if(type==='answer')return model.advanceTask(payload.choiceIndex);
   if(type==='talk')return model.talkTo(payload.npcId,payload.choice);
+  if(type==='dismissNote')return model.dismissNote(payload.noteId);
   if(type==='closeTask'){model.closeTask();return{kind:'none'};}
   if(type==='nextDay')return model.nextDay();
   if(type==='endShift'){model.state.remaining=0;model.update(.01);return{};}
@@ -50,7 +52,8 @@ function refreshDirectory(){
 }
 let chosenRole=ROLES[0].id,chosenOutfit=OUTFITS[0].id,chosenDifficulty=DIFFICULTIES[0].id;
 let selectedTaskId=null,taskRenderKey='',taskListKey='',lastEventId=null,lastLog='',lastSave=0,lastUI=0;
-let soundEnabled=false,audio=null,toastTimer=null,simulationTime=0,lastFrame=performance.now(),lastNoise=0;
+let toastTimer=null,simulationTime=0,lastFrame=performance.now();
+const audio=new OfficeAudio({onChange:()=>queueMicrotask(updateAudioUI)});
 let keys=new Set(),mobileDirection=null,resultsShown=false,manualPause=false;
 function option(container,group,item,label,style,cls,checked){
   const wrap=document.createElement('div');wrap.className='choice';
@@ -66,12 +69,12 @@ $('role-description').textContent=ROLES[0].description;
 $('outfit-label').textContent=OUTFITS[0].label;
 $('difficulty-description').textContent=DIFFICULTIES[0].description;
 function toast(text){if(!text)return;$('toast').textContent=text;$('toast').classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.add('hidden'),3400);}
-function tone(freq=520,duration=.12){if(!soundEnabled)return;try{audio??=new(window.AudioContext||window.webkitAudioContext)();audio.resume();const o=audio.createOscillator(),g=audio.createGain();o.type='sine';o.frequency.value=freq;g.gain.setValueAtTime(.035,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+duration);o.connect(g);g.connect(audio.destination);o.start();o.stop(audio.currentTime+duration);}catch{}}
+function tone(freq=520,duration=.12){audio.tone(freq,duration,{volume:.025});}
 function save(){if(net.active||model.state.phase==='lobby')return;try{localStorage.setItem(SAVE_KEY,JSON.stringify(model.serialize()));}catch{}}
 function saved(){try{let v=JSON.parse(localStorage.getItem(SAVE_KEY));if(typeof v==='string')v=JSON.parse(v);return v;}catch{return null;}}
 $('continue-btn').classList.toggle('hidden',!saved());
 const onlineContinue=document.createElement('button');onlineContinue.id='continue-online-btn';onlineContinue.type='button';onlineContinue.className='continue-button';onlineContinue.textContent='Return to online office ↗';onlineContinue.classList.toggle('hidden',!net.savedSession());$('continue-btn').after(onlineContinue);
-onlineContinue.onclick=async()=>{onlineContinue.disabled=true;try{if(await net.reconnect()){networkDay=model.state.day;showShift();chat.open('team');toast('Your online office is still here.');}else{onlineContinue.classList.add('hidden');toast('That office has closed. Join a new room or open your own.');}}catch(error){toast(error.message);}finally{onlineContinue.disabled=false;}};
+onlineContinue.onclick=async()=>{audio.unlock();onlineContinue.disabled=true;try{if(await net.reconnect()){networkDay=model.state.day;showShift();chat.open('team');toast('Your online office is still here.');}else{onlineContinue.classList.add('hidden');toast('That office has closed. Join a new room or open your own.');}}catch(error){toast(error.message);}finally{onlineContinue.disabled=false;}};
 function showShift(){
   $('lobby-panel').classList.add('hidden');$('shift-panel').classList.remove('hidden');$('pause-btn').classList.remove('hidden');document.body.classList.add('in-shift');
   $('page-title').innerHTML='Another day. <em>Beautifully under control.</em>';
@@ -82,14 +85,14 @@ function showShift(){
   taskListKey='';resultsShown=false;view.resize();refreshDirectory();updateRoom();updateUI();if(window.innerWidth>700)window.scrollTo({top:0,behavior:'auto'});else document.getElementById('canvas-wrap').scrollIntoView({block:'center',behavior:'smooth'});canvas.focus({preventScroll:true});
 }
 $('character-form').addEventListener('submit',async e=>{
-  e.preventDefault();const button=e.submitter;button.disabled=true;
+  e.preventDefault();audio.unlock();const button=e.submitter;button.disabled=true;
   const config={name:$('player-name').value.trim()||'New Hire',role:chosenRole,difficulty:chosenDifficulty,outfit:chosenOutfit,skin:'#d4a181',layout:model.state.layout};
   const mode=document.querySelector('input[name="play-mode"]:checked').value;
   try{if(mode==='solo'){await net.leave();model.start(config);}else{await net.connect(mode,config,model.state.layout,$('join-code').value);networkDay=model.state.day;}
     selectedTaskId=model.state.tasks[0]?.id;showShift();save();tone(540);chat.open(mode==='solo'?'overheard':'team');toast(mode==='solo'?'Welcome aboard. Pick a case to get started.':'Your team shares this office. Invite coworkers with the room code.');
   }catch(error){toast(error.message);}finally{button.disabled=false;}
 });
-$('continue-btn').addEventListener('click',()=>{try{const data=saved();if(!data)throw Error('No saved shift');const result=model.restore(data);if(result===false)throw Error('Invalid save');model.setPaused(false);showShift();toast('Your desk is just how you left it.');}catch{toast('That shift could not be restored. Start a fresh workday.');}});
+$('continue-btn').addEventListener('click',()=>{audio.unlock();try{const data=saved();if(!data)throw Error('No saved shift');const result=model.restore(data);if(result===false)throw Error('Invalid save');model.setPaused(false);showShift();toast('Your desk is just how you left it.');}catch{toast('That shift could not be restored. Start a fresh workday.');}});
 function stationPoint(st){return interactionPoint(st);}
 function deskApproach(desk){const home=deskStandingPoint(desk);if(!desk.ownerId||desk.ownerId===model.state.player.id)return home;const people=[...(model.state.npcs||[]),...(model.state.otherPlayers||[])].filter(p=>!p.hidden);for(const [dx,dy]of[[48,24],[-48,24],[0,54]]){const p={x:home.x+dx,y:home.y+dy};if(model.isFree(p.x,p.y)&&people.every(n=>Math.hypot(n.x-p.x,n.y-p.y)>32))return p;}return model.nearestFree(home.x,home.y+54);}
 function goTo(id){
@@ -109,7 +112,8 @@ function nearest(){
   if(st.kind==='desk')return{id:st.id,label:st.label};
   const task=model.state.tasks.find(t=>t.role===st.id);
   let label=task?'Work on '+st.label:st.label;
-  if(st.id==='coffee')label=model.state.stats.coffee>5?'Take a coffee break':'Restock the coffee';
+  if(st.id==='coffee')label=model.state.coffee?.status==='stale'?'Brew fresh coffee':model.state.coffee?.status==='brewing'?'Check the brewing coffee':model.state.stats.coffee>5?'Take a coffee break':'Restock the coffee';
+  if(st.id==='call'&&model.state.phoneQueue?.waiting)label='Answer a queued call';
   if(st.id==='kitchen')label=e?.station==='kitchen'?(e.actionLabel||'Restore kitchen peace'):'Check the kitchen';
   if(st.id==='gym')label=model.state.gymBlocked?'Ask the visitor to leave':'Take a gym break';
   if(e&&(e.station===st.id||st.id==='operations'&&e.type!=='fire'))label=e.actionLabel||'Help resolve '+e.title.toLowerCase();
@@ -122,7 +126,8 @@ async function interact(){
   if(result.kind==='task'){
     selectedTaskId=result.task?.id||model.state.currentTask;
     taskRenderKey='';renderTask(result.task);if(!net.active)model.setPaused(true);if(!$('task-dialog').open)$('task-dialog').showModal();keys.clear();
-  }else{toast(result.message||'All set.');tone(result.kind==='event'?660:420,.1);}
+  }else if(result.kind==='note'&&result.note){showDeskNote(result.note);}
+  else{toast(result.message||'All set.');tone(result.kind==='event'?660:420,.1);}
   updateUI();save();
 }
 $('interact-button').addEventListener('click',interact);
@@ -152,10 +157,26 @@ $('pause-dialog').addEventListener('cancel',e=>{e.preventDefault();resume();});
 async function lobby(){save();if(net.active)await net.leave();document.querySelectorAll('dialog[open]').forEach(d=>d.close());model.state.phase='lobby';keys.clear();$('lobby-panel').classList.remove('hidden');$('shift-panel').classList.add('hidden');$('pause-btn').classList.add('hidden');$('continue-btn').classList.toggle('hidden',!saved());document.body.classList.remove('in-shift');$('page-title').innerHTML='Good benefits. <em>Questionable coworkers.</em>';taskListKey='';resultsShown=false;updateRoom();refreshDirectory();view.resize();}
 $('pause-restart').addEventListener('click',lobby);$('new-character-btn').addEventListener('click',lobby);
 function showInfo(id){const d=$(id);d.dataset.resume=model.state.phase==='playing'?'yes':'no';if(!net.active&&model.state.phase==='playing')model.setPaused(true);keys.clear();d.showModal();}
-['help-dialog','about-dialog'].forEach(id=>$(id).addEventListener('close',()=>{if(!net.active&&$(id).dataset.resume==='yes'&&model.state.phase==='paused')model.setPaused(false);canvas.focus({preventScroll:true});}));
+['help-dialog','about-dialog','note-dialog'].forEach(id=>$(id).addEventListener('close',()=>{if(!net.active&&$(id).dataset.resume==='yes'&&model.state.phase==='paused')model.setPaused(false);canvas.focus({preventScroll:true});}));
 document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>$(b.dataset.close).close()));
 $('help-btn').addEventListener('click',()=>showInfo('help-dialog'));$('about-btn').addEventListener('click',()=>showInfo('about-dialog'));
-$('sound-btn').addEventListener('click',()=>{soundEnabled=!soundEnabled;$('sound-btn').setAttribute('aria-pressed',String(soundEnabled));$('sound-btn').querySelector('span').textContent=soundEnabled?'Sound on':'Sound off';if(soundEnabled)tone(600,.1);});
+$('sound-btn').addEventListener('click',()=>{audio.set('enabled',!audio.prefs.enabled);if(audio.prefs.enabled)audio.unlock();});
+function updateAudioUI(){
+  $('sound-btn').setAttribute('aria-pressed',String(audio.prefs.enabled));$('sound-btn').querySelector('span').textContent=audio.prefs.enabled?'Sound on':'Sound off';
+  $('audio-enabled').textContent=audio.prefs.enabled?'Office sounds on':'Office sounds off';$('audio-enabled').setAttribute('aria-pressed',String(audio.prefs.enabled));
+  $('sound-btn').title=audio.prefs.enabled?'Sound starts when you clock in. Click to mute.':'Click to turn office sounds on.';
+  for(const key of ['master','ambience','effects','voices']){const input=$('audio-'+key);if(input&&document.activeElement!==input)input.value=Math.round(audio.prefs[key]*100);$('audio-'+key+'-value').textContent=Math.round(audio.prefs[key]*100)+'%';}
+  const select=$('audio-voice'),voiceKey=audio.voices.map(v=>v.voiceURI).join('|');if(select.dataset.voices!==voiceKey){select.replaceChildren();const auto=document.createElement('option');auto.value='';auto.textContent='Automatic · different voices for coworkers';select.append(auto);for(const v of audio.voices){const o=document.createElement('option');o.value=v.voiceURI;o.textContent=v.name+' ('+v.lang+')';select.append(o);}select.dataset.voices=voiceKey;}select.value=audio.prefs.voiceURI;
+  $('audio-status').textContent=!('speechSynthesis'in window)?'This browser supports office sounds; spoken lines are unavailable. Every line stays in Office chatter.':audio.voices.length?'Sound starts with your first click. Voices use those installed on this device.':'Waiting for device voices. Every spoken line also appears in Office chatter.';
+  if(chat){chat.readAloud=audio.prefs.readBanter;chat.updateReadButton();}
+}
+$('sound-settings').onclick=()=>{updateAudioUI();$('audio-dialog').showModal();};
+for(const key of ['master','ambience','effects','voices'])$('audio-'+key).oninput=e=>audio.set(key,Number(e.target.value)/100);
+$('audio-voice').onchange=e=>audio.set('voiceURI',e.target.value);
+$('audio-enabled').onclick=()=>{audio.set('enabled',!audio.prefs.enabled);if(audio.prefs.enabled)audio.unlock();};
+$('audio-preview').onclick=()=>{if(!audio.prefs.enabled){toast('Turn office sounds on to hear the preview.');return;}audio.preview();};
+function showDeskNote(note){$('note-author').textContent='A NOTE FROM '+String(note.author||'Upper management').toUpperCase();$('note-text').textContent=note.text||'A little reminder from your manager.';$('note-dialog').dataset.noteId=note.id;showInfo('note-dialog');}
+$('note-dismiss').onclick=async()=>{try{const result=await action('dismissNote',{noteId:$('note-dialog').dataset.noteId});if(result?.kind==='blocked'){toast(result.message);return;}$('note-dialog').close();toast(result?.message||'Note filed. A fresh start for your desk.');save();}catch(error){toast(error.message);}};
 $('coffee-go').addEventListener('click',()=>goTo('coffee'));
 $('my-desk-go').addEventListener('click',()=>{const desk=(model.desks||[]).find(d=>d.ownerId===model.state.player.id);if(desk)goTo('desk:'+desk.id);else toast('Clock in to claim your own desk.');});
 $('event-go').addEventListener('click',()=>{const e=model.state.event;if(e)goTo(e.npcId?'npc:'+e.npcId:e.station||'operations');});
@@ -175,7 +196,9 @@ function updateUI(){
  const s=model.state,p=s.player,stats=s.stats;
  $('stat-completed').innerHTML=stats.completed+' <small>/ '+(stats.completed?'nicely done':'Let’s get started')+'</small>';
  $('stat-happiness').innerHTML=Math.round(stats.satisfaction)+'<small>%</small>';$('stat-morale').innerHTML=Math.round(stats.morale)+'<small>%</small>';
- $('stat-coffee').textContent=stats.coffee>65?'Fully caffeinated':stats.coffee>20?'Running a little low':'Caffeine emergency';
+ $('stat-coffee').textContent=s.coffee?.status==='brewing'?'A fresh pot is brewing':s.coffee?.status==='stale'?'This pot has seen things':stats.coffee>65?'Fresh & fully stocked':stats.coffee>20?'Running a little low':'Caffeine emergency';
+ const queue=s.phoneQueue||{};$('queue-waiting').textContent=(queue.waiting||0)+' waiting';$('queue-answered').textContent=(queue.answered||0)+' answered · '+(queue.missed||0)+' missed';$('phone-queue').classList.toggle('ringing',!!queue.ringing);$('queue-go').disabled=s.phase!=='playing';
+ const unread=(s.deskNotes||[]).filter(n=>n.ownerId===p.id&&!n.read).length;$('my-desk-go').textContent=unread?'My desk · '+unread+' new note'+(unread===1?'':'s')+' ↗':'My desk ↗';
  $('stress-label').textContent=Math.round(p.stress||0)+'%';$('stress-meter').style.width=Math.min(100,p.stress||0)+'%';$('stress-meter').style.background=p.stress>70?'#c68d70':'#a7b47f';$('stress-hint').textContent=p.stress>70?'Time for a coffee break. Or a very deep breath.':p.stress>35?'A little hectic. A little coffee might help.':"Deep breaths. You've got this.";
  $('day-label').textContent='DAY '+String(s.day||1).padStart(2,'0');
  if(s.phase!=='lobby'){const remain=Math.max(0,Math.ceil(s.remaining));const elapsed=s.total-s.remaining;const clock=8*60+30+Math.floor(elapsed/60*30);const hour=Math.floor(clock/60)%12||12;const minute=String(clock%60).padStart(2,'0');$('time-label').querySelector('span').textContent=hour+':'+minute+' '+(clock>=720?'PM':'AM')+' · '+Math.floor(remain/60)+':'+String(remain%60).padStart(2,'0')+' left';updateTasks();}
@@ -199,7 +222,7 @@ window.addEventListener('keydown',e=>{
 });
 window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));window.addEventListener('blur',()=>{keys.clear();mobileDirection=null;});
 document.querySelectorAll('[data-dir]').forEach(b=>{b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);mobileDirection=b.dataset.dir.split(',').map(Number);});['pointerup','pointercancel','lostpointercapture'].forEach(event=>b.addEventListener(event,()=>mobileDirection=null));});
-document.addEventListener('visibilitychange',()=>{if(document.hidden){keys.clear();if(!net.active&&model.state.phase==='playing')pause();save();}});
+document.addEventListener('visibilitychange',()=>{audio.discardHistory(model.state.banter||[]);if(document.hidden){audio.setActive(false);keys.clear();if(!net.active&&model.state.phase==='playing')pause();save();}});
 window.addEventListener('beforeunload',save);
 function frame(now){
  const dt=Math.min(.05,Math.max(0,(now-lastFrame)/1000));lastFrame=now;simulationTime+=dt;
@@ -208,12 +231,13 @@ function frame(now){
  if(net.active)net.step(dt);else model.update(dt);view.render(simulationTime);
  if(now-lastUI>180){updateUI();lastUI=now;}
  if(now-lastSave>5000){save();lastSave=now;}
- const event=model.state.event;if(soundEnabled&&event&&now-lastNoise>4000){if(event.type==='phone'){tone(680,.08);setTimeout(()=>tone(800,.08),140);}if(event.type==='music'){tone(330,.11);setTimeout(()=>tone(440,.11),150);}if(event.type==='microwave')tone(1000,.08);lastNoise=now;}
+ audio.update(model.state,dt,{quiet:builder?.active||!!document.querySelector('dialog[open]:not(#audio-dialog)'),sessionKey:(net.active?net.room?.code||'online':'solo')+':'+model.state.day+':'+model.state.player.id+':'+model.state.player.name});
  requestAnimationFrame(frame);
 }
 builder=new FloorBuilder(model,view,{toast,onDone:()=>{if(model.state.phase==='lobby'){$('lobby-panel').classList.remove('hidden');}else{$('shift-panel').classList.remove('hidden');}refreshDirectory();}});
 builder.loadSaved();
-chat=new OfficeChat(model,{toast,onSend:async text=>{const result=await net.enqueue('chat',{text},true);if(result.kind==='blocked')throw Error(result.message);},onTalk:(npcId,choice)=>action('talk',{npcId,choice}),onWalk:id=>goTo('npc:'+id)});
+chat=new OfficeChat(model,{toast,audio,onSend:async text=>{const result=await net.enqueue('chat',{text},true);if(result.kind==='blocked')throw Error(result.message);},onTalk:(npcId,choice)=>action('talk',{npcId,choice}),onWalk:id=>goTo('npc:'+id)});
+$('queue-go').onclick=()=>goTo('call');
 $('chat-toggle').onclick=()=>chat.open('overheard');
 $('builder-open').onclick=()=>{if(net.active){toast('Choose a floor before opening an online office.');return;}builder.open();};
 $('department-nav').onchange=e=>{if(e.target.value)goTo(e.target.value);};

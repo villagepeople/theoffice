@@ -1,4 +1,4 @@
-BENEFITS: AN OFFICE COMEDY — VERSION 2.1
+BENEFITS: AN OFFICE COMEDY — VERSION 2.2
 Upper management needs you.
 
 LOCAL PLAY
@@ -31,7 +31,12 @@ Office chatter opens three tabs: Overheard, Team, and Talk to NPCs.
 Overheard contains shared office banter, events, and management summons.
 Team messages go only to people in the same online room.
 Walk near an NPC to say hello, offer help, or ask for quiet.
-Optional read-aloud uses the browser's speech feature. It starts turned off.
+Office sounds and spoken manager/queue lines start on when you clock in.
+Use Mixer for room, phone/event, and voice volumes or to choose a device voice.
+Read all banter is optional. Mute choices are remembered in this browser.
+The gym regular walks out to complain about unanswered calls, then returns.
+Managers inspect coffee, coordinate help, and clean desks while leaving notes.
+Visit your desk and press E to read or file a note.
 
 CONTROLS
 Click to walk or use WASD / arrow keys. E interacts. T opens NPC conversations.
@@ -42,7 +47,9 @@ Names can be shown in full, shortened, or hidden. Zoom controls offer a closer v
 
 CHECKS AND BUILD
 node check-model.mjs    Runs 30 model checks.
-node check-network.mjs  Runs fourteen multiplayer integration groups.
+node check-office.mjs   Checks manager routines, queues, notes, and migrations.
+node check-audio.mjs    Checks audio activation, mute, scheduling, and fallbacks.
+node check-network.mjs  Runs eighteen multiplayer integration groups.
 node check-client.mjs   Runs five client recovery checks.
 node check-builder.mjs  Runs four floor-builder interaction checks.
 node build-worker.mjs   Bundles the game and API into dist/server/index.js.

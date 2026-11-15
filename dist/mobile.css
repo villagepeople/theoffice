@@ -1,0 +1,1170 @@
+/* The compact game uses the viewport for the office and sheets for its tools. */
+.compact-ui.in-shift .toast{top:calc(112px + env(safe-area-inset-top,0px));bottom:auto;max-width:min(85vw,360px)}
+.compact-ui.building-floor .hud{display:none!important}
+.mobile-gamebar,
+.mobile-dock {
+  display: none;
+}
+
+body.compact-ui {
+  overflow-x: hidden;
+}
+
+.compact-ui button,
+.compact-ui a,
+.compact-ui input,
+.compact-ui select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.compact-ui button {
+  touch-action: manipulation;
+}
+
+.compact-ui input:not([type="radio"]):not([type="checkbox"]),
+.compact-ui textarea,
+.compact-ui select {
+  min-height: 44px;
+  font-size: 16px;
+}
+
+.compact-ui .site-header {
+  min-height: 76px;
+  height: auto;
+  padding: 12px 16px;
+  gap: 10px;
+}
+
+.compact-ui .header-note,
+.compact-ui .header-actions .text-button span {
+  display: none;
+}
+
+.compact-ui .header-actions {
+  min-width: 0;
+  gap: 2px;
+}
+
+.compact-ui .header-actions button {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+  justify-content: center;
+  padding: 8px;
+}
+
+.compact-ui .header-actions svg {
+  width: 20px;
+  height: 20px;
+}
+
+.compact-ui .app-shell {
+  padding: 24px 16px 0;
+}
+
+.compact-ui .office-tools,
+.compact-ui .tools-left,
+.compact-ui .tools-right,
+.compact-ui .room-ribbon,
+.compact-ui .room-ribbon > div {
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.compact-ui .office-tools {
+  margin: 0 0 16px;
+  gap: 10px 12px;
+}
+
+.compact-ui .tools-left,
+.compact-ui .tools-right {
+  gap: 8px;
+}
+
+.compact-ui .tools-left label,
+.compact-ui .tools-right label {
+  font-size: 11px;
+}
+
+.compact-ui .office-tools select {
+  max-width: 100%;
+  font-size: 14px;
+}
+
+.compact-ui .studio-button {
+  min-height: 44px;
+  padding: 10px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.compact-ui .tools-right > button {
+  width: 44px;
+  height: 44px;
+  font-size: 23px;
+}
+
+.compact-ui .room-ribbon {
+  gap: 8px;
+}
+
+.compact-ui .room-ribbon > div {
+  gap: 8px;
+}
+
+.compact-ui .room-ribbon button {
+  min-height: 44px;
+  font-size: 13px;
+}
+
+.compact-ui .field-label,
+.compact-ui legend {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.compact-ui .field-hint,
+.compact-ui .intro-copy {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.compact-ui .role-choice,
+.compact-ui .difficulty-choice,
+.compact-ui .mode-options label {
+  min-height: 44px;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.compact-ui .role-choice {
+  padding: 10px 9px;
+}
+
+.compact-ui .outfit-choice {
+  width: 48px;
+  height: 48px;
+}
+
+.compact-ui .choice input {
+  min-height: 0;
+}
+
+.compact-ui .mode-options input {
+  width: 17px;
+  height: 17px;
+  min-height: 0;
+}
+
+.compact-ui .primary-button,
+.compact-ui .secondary-button,
+.compact-ui .continue-button {
+  min-height: 48px;
+  font-size: 14px;
+}
+
+.compact-ui .sound-note,
+.compact-ui .save-note {
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+/* Play and floor editing share the same full-screen canvas frame. */
+body.compact-ui.in-shift,
+body.compact-ui.building-floor {
+  height: var(--office-vh, 100dvh);
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.compact-ui:is(.in-shift, .building-floor) > .site-header,
+.compact-ui:is(.in-shift, .building-floor) .page-heading,
+.compact-ui:is(.in-shift, .building-floor) .office-tools,
+.compact-ui:is(.in-shift, .building-floor) .room-ribbon,
+.compact-ui:is(.in-shift, .building-floor) .game-layout > .sidebar,
+.compact-ui:is(.in-shift, .building-floor) .activity-strip,
+.compact-ui:is(.in-shift, .building-floor) .site-footer,
+.compact-ui:is(.in-shift, .building-floor) .board-topline,
+.compact-ui:is(.in-shift, .building-floor) .board-footer {
+  display: none;
+}
+
+.compact-ui:is(.in-shift, .building-floor) .app-shell,
+.compact-ui:is(.in-shift, .building-floor) .game-layout {
+  display: block;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  max-width: none;
+}
+
+.compact-ui:is(.in-shift, .building-floor) .office-board {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: var(--office-vh, 100dvh);
+  min-height: 0;
+  max-height: var(--office-vh, 100dvh);
+  border: 0;
+  border-radius: 0;
+  align-self: auto;
+  overflow: hidden;
+}
+
+.compact-ui:is(.in-shift, .building-floor) .mobile-gamebar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: calc(54px + env(safe-area-inset-top, 0px));
+  padding: calc(4px + env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-right, 0px)) 4px max(10px, env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid #d9e0cf;
+  background: #fafbf3;
+}
+
+.mobile-gamebar button,
+.mobile-dock button {
+  border: 1px solid #d2ddc8;
+  border-radius: 8px;
+  background: #f1f5e9;
+  color: #355b42;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  touch-action: manipulation;
+}
+
+.mobile-gamebar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mobile-gamebar button b {
+  background: #dce7cd;
+  border-radius: 10px;
+  padding: 2px 5px;
+  font-size: 10px;
+}
+
+.mobile-game-title {
+  min-width: 0;
+  text-align: center;
+}
+
+.mobile-game-title strong {
+  display: block;
+  font: 24px/1 Georgia, 'Times New Roman', serif;
+  letter-spacing: -1px;
+}
+
+.mobile-game-title small {
+  display: block;
+  margin-top: 4px;
+  color: #75866b;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compact-ui:is(.in-shift, .building-floor) .hud {
+  flex: 0 0 auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-height: 49px;
+  padding: 5px max(12px, env(safe-area-inset-right, 0px)) 5px max(12px, env(safe-area-inset-left, 0px));
+  gap: 9px;
+  border-bottom: 1px solid #dce3d1;
+}
+
+.compact-ui:is(.in-shift, .building-floor) .hud-icon,
+.compact-ui:is(.in-shift, .building-floor) .coffee-stat,
+.compact-ui:is(.in-shift, .building-floor) #stat-completed small {
+  display: none;
+}
+
+.compact-ui:is(.in-shift, .building-floor) .hud-item {
+  min-width: 0;
+  justify-content: center;
+  text-align: center;
+}
+
+.compact-ui:is(.in-shift, .building-floor) .hud-item > div > span {
+  font-size: 10px;
+  line-height: 1.2;
+  letter-spacing: .3px;
+  white-space: normal;
+}
+
+.compact-ui:is(.in-shift, .building-floor) .hud-item strong {
+  margin-top: 2px;
+  font-size: 23px;
+  line-height: 1.05;
+}
+
+.compact-ui:is(.in-shift, .building-floor) .hud-item strong small {
+  font-size: 10px;
+}
+
+.compact-ui:is(.in-shift, .building-floor) .canvas-wrap {
+  flex: 1 1 0;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+}
+
+.compact-ui:is(.in-shift, .building-floor) #office-canvas {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.compact-ui:is(.in-shift, .building-floor) .map-key,
+.compact-ui:is(.in-shift, .building-floor) .scene-tag,
+.compact-ui:is(.in-shift, .building-floor) .walk-tooltip {
+  display: none !important;
+}
+
+.compact-ui:is(.in-shift, .building-floor) .mobile-dock {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(0, 1.3fr) 44px minmax(44px, 1fr) 44px minmax(0, 1.15fr);
+  align-items: stretch;
+  gap: 6px;
+  padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+  background: #fafbf3;
+  border-top: 1px solid #d7e0cc;
+}
+
+.mobile-dock button {
+  padding: 7px 4px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+#mobile-zoom-in,
+#mobile-zoom-out {
+  font-size: 24px;
+  font-weight: 400;
+}
+
+.compact-ui.in-shift .mobile-controls {
+  display: block;
+  z-index: 8;
+  left: max(12px, env(safe-area-inset-left, 0px));
+  bottom: 14px;
+  width: 140px;
+  touch-action: none;
+}
+
+.compact-ui.in-shift .mobile-controls > button {
+  margin-left: 48px;
+}
+
+.compact-ui.in-shift .mobile-controls div {
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.compact-ui.in-shift .mobile-controls button {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 20px;
+  font-weight: 600;
+  border-radius: 9px;
+  background: #fafcf1ed;
+  box-shadow: 0 2px 7px #294c3c18;
+  color: #42643d;
+}
+
+.compact-ui.in-shift .mobile-controls button:active {
+  background: #dce8ca;
+}
+
+.compact-ui.building-floor .mobile-controls {
+  display: none;
+}
+
+.compact-ui.in-shift .interact-prompt {
+  left: auto;
+  right: max(12px, env(safe-area-inset-right, 0px));
+  bottom: 14px;
+  transform: none;
+  max-width: calc(100% - 176px);
+  min-height: 48px;
+  padding: 0 0 0 12px;
+  gap: 6px;
+  font-size: 12px;
+  white-space: normal;
+  line-height: 1.35;
+  z-index: 8;
+}
+
+.compact-ui.in-shift .interact-prompt kbd {
+  display: none;
+}
+
+.compact-ui.in-shift .interact-prompt button {
+  align-self: stretch;
+  min-width: 44px;
+  min-height: 48px;
+  padding: 9px;
+  font-size: 23px;
+  background: #42664b;
+  border-radius: 0 7px 7px 0;
+}
+
+.compact-ui:is(.in-shift, .building-floor) .event-banner,
+.compact-ui:is(.in-shift, .building-floor) .summon-banner {
+  left: max(10px, env(safe-area-inset-left, 0px));
+  right: max(10px, env(safe-area-inset-right, 0px));
+  top: 10px;
+  bottom: auto;
+  gap: 8px;
+  min-height: 54px;
+  padding: 5px 7px 5px 12px;
+  box-shadow: 0 3px 10px #294c3c12;
+  z-index: 5;
+}
+
+.compact-ui:is(.in-shift, .building-floor) .event-banner > div,
+.compact-ui:is(.in-shift, .building-floor) .summon-banner > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.compact-ui:is(.in-shift, .building-floor) .event-icon,
+.compact-ui:is(.in-shift, .building-floor) .event-banner p,
+.compact-ui:is(.in-shift, .building-floor) .summon-banner p {
+  display: none;
+}
+
+.compact-ui:is(.in-shift, .building-floor) .event-banner strong,
+.compact-ui:is(.in-shift, .building-floor) .summon-banner strong {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.compact-ui:is(.in-shift, .building-floor) .event-banner button,
+.compact-ui:is(.in-shift, .building-floor) .summon-banner button {
+  min-height: 44px;
+  padding: 9px;
+  max-width: 45%;
+  white-space: normal;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.compact-ui.has-office-event.in-shift .summon-banner {
+  top: 74px;
+}
+
+/* Native dialogs stay above the full-screen board and fit the on-screen keyboard. */
+.compact-ui .modal {
+  max-width: calc(100vw - 16px);
+  max-height: calc(var(--office-vh, 100dvh) - 16px);
+  padding: 26px 20px;
+  margin: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.compact-ui .modal h2 {
+  font-size: 30px;
+}
+
+.compact-ui .modal .close-button {
+  width: 44px;
+  height: 44px;
+  right: 8px;
+  top: 8px;
+}
+
+.compact-ui .modal .answer-button {
+  min-height: 56px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.compact-ui .modal .task-question {
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+.compact-ui .modal .modal-note,
+.compact-ui .modal > p:not(.eyebrow):not(.task-question):not(.task-feedback) {
+  font-size: 13px !important;
+}
+
+.compact-ui .modal .task-feedback {
+  font-size: 14px;
+}
+
+.compact-ui .modal .help-grid {
+  grid-template-columns: 1fr;
+}
+
+.compact-ui .modal .help-grid h3,
+.compact-ui .modal .help-grid p {
+  font-size: 14px;
+}
+
+.compact-ui .audio-sliders input {
+  min-height: 44px;
+}
+
+.compact-ui .mobile-sheet {
+  position: fixed;
+  inset: auto 8px max(8px, env(safe-area-inset-bottom, 0px));
+  width: calc(100% - 16px);
+  max-width: 680px;
+  max-height: calc(var(--office-vh, 100dvh) - 16px - env(safe-area-inset-bottom, 0px));
+  margin: 0 auto;
+  padding: 0;
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.compact-ui .mobile-sheet[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.compact-ui .mobile-sheet::backdrop {
+  background: #1c332967;
+  backdrop-filter: blur(3px);
+}
+
+.mobile-sheet-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #edf2e4;
+  border-bottom: 1px solid #d8e0cd;
+}
+
+#mobile-sheet-title {
+  margin: 0;
+  font: 26px/1.2 Georgia, 'Times New Roman', serif;
+  letter-spacing: -.6px;
+}
+
+.mobile-sheet > #mobile-sheet-title {
+  padding: 18px 70px 18px 18px;
+  border-bottom: 1px solid #d8e0cd;
+}
+
+.mobile-sheet-header #mobile-sheet-close,
+#mobile-sheet-close {
+  position: static;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid #d1dcc5;
+  border-radius: 50%;
+  background: #fbfcf4;
+  font-size: 25px;
+}
+
+.mobile-sheet > #mobile-sheet-close {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+}
+
+#mobile-sheet-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 18px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-sheet #shift-panel,
+.mobile-sheet #builder-panel {
+  width: 100%;
+  min-width: 0;
+}
+
+.mobile-sheet .panel-heading {
+  margin-bottom: 14px;
+}
+
+.mobile-sheet .step-label,
+.mobile-sheet .small-badge {
+  font-size: 10px;
+}
+
+.mobile-sheet .employee-card {
+  padding: 0 0 16px;
+}
+
+.mobile-sheet .employee-card h2 {
+  margin: 0 0 5px;
+  font-size: 27px;
+}
+
+.mobile-sheet .employee-card p,
+.mobile-sheet .stress-block p,
+.mobile-sheet .task-explainer {
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.mobile-sheet .stress-block {
+  padding: 16px 0;
+}
+
+.mobile-sheet .stress-block > div:first-child,
+.mobile-sheet .stress-block strong {
+  font-size: 13px;
+}
+
+.mobile-sheet .task-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  overflow: visible;
+  padding: 0;
+}
+
+.mobile-sheet .task-card {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  min-height: 92px;
+  padding: 14px;
+}
+
+.mobile-sheet .task-meta,
+.mobile-sheet .task-stage,
+.mobile-sheet .task-heading span {
+  font-size: 11px;
+}
+
+.mobile-sheet .task-card h4 {
+  margin: 8px 24px 8px 0;
+  font-size: 15px;
+}
+
+.mobile-sheet .phone-queue strong,
+.mobile-sheet .phone-queue span,
+.mobile-sheet .phone-queue p {
+  font-size: 13px;
+}
+
+.mobile-sheet .phone-queue button,
+.mobile-sheet .sidebar-bottom button {
+  min-height: 44px;
+  font-size: 14px;
+}
+
+.mobile-sheet .sidebar-bottom {
+  display: flex;
+  margin-top: 18px;
+  padding-top: 12px;
+}
+
+.mobile-sheet .sidebar-quote {
+  font-size: 15px;
+}
+
+.mobile-sheet .sidebar-quote small {
+  font-size: 11px;
+}
+
+.mobile-menu-grid,
+.mobile-directory-list {
+  display: grid;
+  gap: 9px;
+}
+
+.mobile-menu-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mobile-menu-grid button,
+.mobile-directory-list button,
+#mobile-sheet-content > button {
+  min-height: 48px;
+  padding: 12px;
+  border: 1px solid #d5dfc8;
+  border-radius: 7px;
+  background: #f0f4e7;
+  color: #42603b;
+  font-size: 14px;
+  text-align: left;
+}
+
+.mobile-room-info {
+  padding: 14px;
+  margin: 0 0 16px;
+  background: #e5efe4;
+  border: 1px solid #cadcc8;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.mobile-room-summary {
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px solid #ccdcc9;
+  border-radius: 7px;
+  background: #e5efe4;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.mobile-menu-action {
+  display: block;
+  width: 100%;
+  margin-bottom: 9px;
+}
+
+.mobile-sheet button:disabled {
+  opacity: .5;
+}
+
+.mobile-sheet .builder-tools {
+  gap: 8px;
+}
+
+.mobile-sheet .builder-tools button,
+.mobile-sheet .builder-edit-row button,
+.mobile-sheet .floor-swatches button,
+.builder-nudge-controls button {
+  min-height: 44px;
+  min-width: 44px;
+  font-size: 14px;
+}
+
+.mobile-sheet .builder-edit-row button {
+  flex: 1;
+  margin-top: 0;
+}
+
+.mobile-sheet .builder-edit-row {
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.mobile-sheet .builder-help {
+  margin-top: 18px;
+}
+
+.mobile-sheet .builder-help p,
+.mobile-sheet #builder-feedback,
+.builder-gesture-hint {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.builder-nudge-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(44px, 1fr));
+  gap: 8px;
+}
+
+.builder-nudge-controls button {
+  border: 1px solid #ccd9c1;
+  border-radius: 7px;
+  background: #eff4e6;
+  font-size: 22px;
+}
+
+/* Chatter is opened deliberately, and remains usable with a software keyboard. */
+#mobile-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background: #233d3255;
+  backdrop-filter: blur(2px);
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.compact-ui .chat-dock {
+  z-index: 60;
+  left: max(8px, env(safe-area-inset-left, 0px));
+  right: max(8px, env(safe-area-inset-right, 0px));
+  bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  width: auto;
+  max-width: 680px;
+  height: min(590px, calc(var(--office-vh, 100dvh) - 100px));
+  max-height: calc(var(--office-vh, 100dvh) - 16px - env(safe-area-inset-bottom, 0px));
+  min-height: 0;
+  margin: 0 auto;
+  border-radius: 16px;
+  box-shadow: 0 10px 60px #203b3440;
+}
+
+.compact-ui .chat-heading {
+  flex-shrink: 0;
+  min-height: 62px;
+  padding: 8px 12px 8px 16px;
+}
+
+.compact-ui .chat-heading strong {
+  font-size: 22px;
+}
+
+.compact-ui .chat-heading small {
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.compact-ui .chat-heading > button {
+  min-height: 44px;
+  min-width: 44px;
+  font-size: 28px;
+}
+
+.compact-ui .chat-tabs {
+  flex-shrink: 0;
+  padding: 0 8px;
+}
+
+.compact-ui .chat-tabs button {
+  flex: 1;
+  min-height: 44px;
+  padding: 9px 5px;
+  font-size: 13px;
+}
+
+.compact-ui .chat-messages {
+  min-height: 0;
+  padding: 14px 16px;
+}
+
+.compact-ui .chat-line {
+  margin-bottom: 17px;
+}
+
+.compact-ui .chat-line strong {
+  font-size: 13px;
+}
+
+.compact-ui .chat-line > div > span {
+  font-size: 9px;
+}
+
+.compact-ui .chat-line p {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.compact-ui .chat-form {
+  flex-shrink: 0;
+  padding: 8px 10px;
+  align-items: stretch;
+}
+
+.compact-ui .chat-form input {
+  min-width: 0;
+  font-size: 16px;
+}
+
+.compact-ui .chat-form button {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.compact-ui .chat-bottom {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 12px;
+}
+
+.compact-ui .chat-bottom button {
+  min-height: 44px;
+  font-size: 11px;
+}
+
+.compact-ui .chat-bottom span {
+  font-size: 10px;
+}
+
+.compact-ui #npc-chat-controls {
+  flex-shrink: 0;
+  padding: 10px 14px;
+}
+
+.compact-ui .npc-chat-actions button {
+  min-height: 44px;
+  padding: 7px 5px;
+  font-size: 12px;
+}
+
+.compact-ui #npc-chat-controls .field-hint {
+  margin: 7px 0 0;
+  font-size: 11px;
+}
+
+.compact-ui .toast {
+  z-index: 80;
+  bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+  max-width: calc(100vw - 24px);
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  pointer-events: none;
+}
+
+.compact-ui.mobile-keyboard-open .chat-dock {
+  height: calc(var(--office-vh, 100dvh) - 16px);
+}
+
+.compact-ui.mobile-keyboard-open .chat-tabs,
+.compact-ui.mobile-keyboard-open .chat-bottom,
+.compact-ui.mobile-keyboard-open .chat-heading small {
+  display: none;
+}
+
+.compact-ui.mobile-keyboard-open .chat-heading {
+  min-height: 44px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.compact-ui.mobile-keyboard-open .chat-heading strong {
+  font-size: 19px;
+}
+
+.compact-ui.mobile-keyboard-open .chat-form {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+@media (max-width: 760px) {
+  .compact-ui:not(.in-shift):not(.building-floor) .game-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .compact-ui:not(.in-shift):not(.building-floor) .sidebar {
+    width: 100%;
+    min-height: 0;
+    padding: 22px 18px;
+  }
+
+  .compact-ui:not(.in-shift):not(.building-floor) .office-board {
+    position: relative;
+    top: auto;
+    width: 100%;
+    height: 440px;
+    min-height: 0;
+  }
+
+  .compact-ui:not(.in-shift):not(.building-floor) .canvas-wrap {
+    height: auto;
+    min-height: 0;
+    flex: 1;
+  }
+
+  .compact-ui .brand {
+    font-size: 24px;
+    gap: 9px;
+  }
+
+  .compact-ui .brand-mark {
+    width: 35px;
+    height: 35px;
+  }
+
+  .compact-ui .brand-sub {
+    font-size: 6px;
+    letter-spacing: 2.1px;
+  }
+
+  .compact-ui .page-heading h1 {
+    font-size: 29px;
+  }
+
+  .compact-ui .role-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .compact-ui .outfit-options {
+    justify-content: flex-start;
+    gap: 16px;
+  }
+
+  .compact-ui .office-tools {
+    align-items: flex-start;
+  }
+
+  .compact-ui .tools-left {
+    width: 100%;
+  }
+
+  .compact-ui .tools-left label {
+    display: none;
+  }
+
+  .compact-ui .tools-left select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .compact-ui .site-footer {
+    flex-wrap: wrap;
+    font-size: 11px;
+    gap: 8px;
+  }
+
+  .compact-ui .site-footer > span {
+    max-width: 100%;
+  }
+
+  .compact-ui .site-footer button {
+    min-height: 44px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .compact-ui .site-header {
+    padding-left: 12px;
+    padding-right: 12px;
+    gap: 6px;
+  }
+
+  .compact-ui .brand-mark {
+    display: none;
+  }
+
+  .compact-ui .header-actions {
+    gap: 0;
+  }
+
+  .mobile-gamebar button {
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  .mobile-game-title strong {
+    font-size: 22px;
+  }
+
+  .mobile-game-title small {
+    font-size: 11px;
+  }
+
+  .mobile-dock button {
+    font-size: 11px;
+  }
+
+  .mobile-dock #mobile-zoom-in,
+  .mobile-dock #mobile-zoom-out {
+    font-size: 23px;
+  }
+
+  .compact-ui .npc-chat-actions button {
+    font-size: 11px;
+  }
+}
+
+@media (max-height: 500px) {
+  .compact-ui:is(.in-shift, .building-floor) .mobile-gamebar {
+    min-height: calc(46px + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: 0;
+  }
+
+  .compact-ui:is(.in-shift, .building-floor) .mobile-game-title strong {
+    font-size: 21px;
+  }
+
+  .compact-ui:is(.in-shift, .building-floor) .mobile-game-title small {
+    font-size: 12px;
+    margin-top: 2px;
+  }
+
+  .compact-ui:is(.in-shift, .building-floor) .hud {
+    min-height: 34px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+
+  .compact-ui:is(.in-shift, .building-floor) .hud-item > div {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .compact-ui:is(.in-shift, .building-floor) .hud-item strong {
+    font-size: 20px;
+    margin: 0;
+  }
+
+  .compact-ui:is(.in-shift, .building-floor) .mobile-dock {
+    padding-top: 3px;
+    padding-bottom: calc(3px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .compact-ui .chat-dock {
+    height: calc(var(--office-vh, 100dvh) - 16px);
+  }
+
+  .compact-ui .chat-heading {
+    min-height: 52px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
+  .compact-ui .chat-heading small {
+    font-size: 10px;
+  }
+
+  .compact-ui .chat-heading strong {
+    font-size: 20px;
+  }
+
+  .compact-ui .chat-bottom span,
+  .compact-ui #npc-chat-controls .field-hint {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compact-ui *,
+  .compact-ui *::before,
+  .compact-ui *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0s !important;
+  }
+}

@@ -4,6 +4,8 @@ import {OfficeNetwork} from './network.js';
 import {FloorBuilder} from './builder.js';
 import {OfficeChat} from './office-chat.js';
 import {OfficeAudio} from './audio.js';
+import {MobileOffice} from './mobile.js';
+import {TouchControls} from './touch-controls.js';
 import {interactionPoint,deskStandingPoint} from './layout.js';
 const $=id=>document.getElementById(id);
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -13,7 +15,7 @@ const model=new GameModel();
 const canvas=$('office-canvas');
 const view=new OfficeView(canvas,model);
 const SAVE_KEY='benefits-bedlam-shift-v1';
-let builder,chat,networkDay=0,actionBusy=false;
+let builder,chat,mobile,touch,networkDay=0,actionBusy=false;
 const net=new OfficeNetwork(model,{onStatus:status=>{const el=document.getElementById('room-status');if(el)el.textContent=status;},onChange:info=>{
   if(info.disconnected){toast(info.error||'The office disconnected. Rejoin using the room code.');lobby();return;}
   if(chat)chat.render(net.room);
@@ -74,7 +76,7 @@ function save(){if(net.active||model.state.phase==='lobby')return;try{localStora
 function saved(){try{let v=JSON.parse(localStorage.getItem(SAVE_KEY));if(typeof v==='string')v=JSON.parse(v);return v;}catch{return null;}}
 $('continue-btn').classList.toggle('hidden',!saved());
 const onlineContinue=document.createElement('button');onlineContinue.id='continue-online-btn';onlineContinue.type='button';onlineContinue.className='continue-button';onlineContinue.textContent='Return to online office ↗';onlineContinue.classList.toggle('hidden',!net.savedSession());$('continue-btn').after(onlineContinue);
-onlineContinue.onclick=async()=>{audio.unlock();onlineContinue.disabled=true;try{if(await net.reconnect()){networkDay=model.state.day;showShift();chat.open('team');toast('Your online office is still here.');}else{onlineContinue.classList.add('hidden');toast('That office has closed. Join a new room or open your own.');}}catch(error){toast(error.message);}finally{onlineContinue.disabled=false;}};
+onlineContinue.onclick=async()=>{audio.unlock();onlineContinue.disabled=true;try{if(await net.reconnect()){networkDay=model.state.day;showShift();if(!mobile?.compact)chat.open('team');toast('Your online office is still here.');}else{onlineContinue.classList.add('hidden');toast('That office has closed. Join a new room or open your own.');}}catch(error){toast(error.message);}finally{onlineContinue.disabled=false;}};
 function showShift(){
   $('lobby-panel').classList.add('hidden');$('shift-panel').classList.remove('hidden');$('pause-btn').classList.remove('hidden');document.body.classList.add('in-shift');
   $('page-title').innerHTML='Another day. <em>Beautifully under control.</em>';
@@ -82,20 +84,21 @@ function showShift(){
   $('employee-role').textContent=ROLES.find(r=>r.id===model.state.player.role)?.label||'Office employee';
   $('employee-avatar').innerHTML=outfitArt;
   $('employee-avatar').style.color=OUTFITS.find(o=>o.id===model.state.player.outfit)?.color||'#a8b495';
-  taskListKey='';resultsShown=false;view.resize();refreshDirectory();updateRoom();updateUI();if(window.innerWidth>700)window.scrollTo({top:0,behavior:'auto'});else document.getElementById('canvas-wrap').scrollIntoView({block:'center',behavior:'smooth'});canvas.focus({preventScroll:true});
+  taskListKey='';resultsShown=false;mobile?.sync(true);if(mobile?.compact)view.recenter();view.resize();refreshDirectory();updateRoom();updateUI();if(!mobile?.compact)window.scrollTo({top:0,behavior:'auto'});canvas.focus({preventScroll:true});
 }
 $('character-form').addEventListener('submit',async e=>{
   e.preventDefault();audio.unlock();const button=e.submitter;button.disabled=true;
   const config={name:$('player-name').value.trim()||'New Hire',role:chosenRole,difficulty:chosenDifficulty,outfit:chosenOutfit,skin:'#d4a181',layout:model.state.layout};
   const mode=document.querySelector('input[name="play-mode"]:checked').value;
   try{if(mode==='solo'){await net.leave();model.start(config);}else{await net.connect(mode,config,model.state.layout,$('join-code').value);networkDay=model.state.day;}
-    selectedTaskId=model.state.tasks[0]?.id;showShift();save();tone(540);chat.open(mode==='solo'?'overheard':'team');toast(mode==='solo'?'Welcome aboard. Pick a case to get started.':'Your team shares this office. Invite coworkers with the room code.');
+    selectedTaskId=model.state.tasks[0]?.id;showShift();save();tone(540);if(!mobile?.compact)chat.open(mode==='solo'?'overheard':'team');toast(mode==='solo'?'Welcome aboard. Pick a case to get started.':'Your team shares this office. Invite coworkers with the room code.');
   }catch(error){toast(error.message);}finally{button.disabled=false;}
 });
 $('continue-btn').addEventListener('click',()=>{audio.unlock();try{const data=saved();if(!data)throw Error('No saved shift');const result=model.restore(data);if(result===false)throw Error('Invalid save');model.setPaused(false);showShift();toast('Your desk is just how you left it.');}catch{toast('That shift could not be restored. Start a fresh workday.');}});
 function stationPoint(st){return interactionPoint(st);}
 function deskApproach(desk){const home=deskStandingPoint(desk);if(!desk.ownerId||desk.ownerId===model.state.player.id)return home;const people=[...(model.state.npcs||[]),...(model.state.otherPlayers||[])].filter(p=>!p.hidden);for(const [dx,dy]of[[48,24],[-48,24],[0,54]]){const p={x:home.x+dx,y:home.y+dy};if(model.isFree(p.x,p.y)&&people.every(n=>Math.hypot(n.x-p.x,n.y-p.y)>32))return p;}return model.nearestFree(home.x,home.y+54);}
 function goTo(id){
+  if(!builder?.active)mobile?.beforeWalk();
   if(builder?.active){if(builder.object(id)){builder.select(id);view.resize();}return;}
   if(model.state.phase!=='playing'){if(model.state.phase==='lobby')toast('Clock in first. Your desk is waiting.');return;}
   if(id?.startsWith('npc:')){const n=model.state.npcs.find(n=>'npc:'+n.id===id);if(n)walk(n.x+30,n.y+20);return;}
@@ -154,7 +157,7 @@ function pause(){if(model.state.phase!=='playing'||$('pause-dialog').open)return
 function resume(){if($('pause-dialog').open)$('pause-dialog').close();manualPause=false;if(!net.active)model.setPaused(false);lastFrame=performance.now();canvas.focus({preventScroll:true});updateUI();}
 $('pause-btn').addEventListener('click',pause);$('resume-btn').addEventListener('click',resume);
 $('pause-dialog').addEventListener('cancel',e=>{e.preventDefault();resume();});
-async function lobby(){save();if(net.active)await net.leave();document.querySelectorAll('dialog[open]').forEach(d=>d.close());model.state.phase='lobby';keys.clear();$('lobby-panel').classList.remove('hidden');$('shift-panel').classList.add('hidden');$('pause-btn').classList.add('hidden');$('continue-btn').classList.toggle('hidden',!saved());document.body.classList.remove('in-shift');$('page-title').innerHTML='Good benefits. <em>Questionable coworkers.</em>';taskListKey='';resultsShown=false;updateRoom();refreshDirectory();view.resize();}
+async function lobby(){save();mobile?.closeAll();if(net.active)await net.leave();onlineContinue.classList.toggle('hidden',!net.savedSession());document.querySelectorAll('dialog[open]').forEach(d=>d.close());model.state.phase='lobby';keys.clear();$('lobby-panel').classList.remove('hidden');$('shift-panel').classList.add('hidden');$('pause-btn').classList.add('hidden');$('continue-btn').classList.toggle('hidden',!saved());document.body.classList.remove('in-shift');$('page-title').innerHTML='Good benefits. <em>Questionable coworkers.</em>';taskListKey='';resultsShown=false;updateRoom();refreshDirectory();mobile?.sync();view.resize();}
 $('pause-restart').addEventListener('click',lobby);$('new-character-btn').addEventListener('click',lobby);
 function showInfo(id){const d=$(id);d.dataset.resume=model.state.phase==='playing'?'yes':'no';if(!net.active&&model.state.phase==='playing')model.setPaused(true);keys.clear();d.showModal();}
 ['help-dialog','about-dialog','note-dialog'].forEach(id=>$(id).addEventListener('close',()=>{if(!net.active&&$(id).dataset.resume==='yes'&&model.state.phase==='paused')model.setPaused(false);canvas.focus({preventScroll:true});}));
@@ -190,14 +193,14 @@ function updateTasks(){
  tasks.forEach(t=>{const r=ROLES.find(r=>r.id===t.role);const b=document.createElement('button');b.className='task-card'+(t.id===selectedTaskId?' selected':'');b.style.setProperty('--role-color',r?.color||'#a7b28d');
  const d=Math.max(0,Math.ceil(t.deadline||0));const due=Math.floor(d/60)+':'+String(d%60).padStart(2,'0');
  b.innerHTML='<div class="task-meta"><span><i class="role-dot"></i>'+esc(r?.short||r?.label||t.role)+'</span><span class="task-deadline">'+due+'</span></div><h4>'+esc(t.title)+'</h4><span class="task-stage">'+(t.step||0)+' / '+t.steps.length+' steps complete</span><span class="task-arrow">↗</span>';
- b.addEventListener('click',()=>{selectedTaskId=t.id;goTo(t.role);taskListKey='';updateTasks();toast('Heading to '+(r?.label||t.role)+'. Press E when you arrive.');});$('task-list').append(b);});
+ b.addEventListener('click',()=>{selectedTaskId=t.id;goTo(t.role);taskListKey='';updateTasks();toast('Heading to '+(r?.label||t.role)+(mobile?.compact?'. Tap the action button when you arrive.':'. Press E when you arrive.')); });$('task-list').append(b);});
 }
 function updateUI(){
  const s=model.state,p=s.player,stats=s.stats;
  $('stat-completed').innerHTML=stats.completed+' <small>/ '+(stats.completed?'nicely done':'Let’s get started')+'</small>';
  $('stat-happiness').innerHTML=Math.round(stats.satisfaction)+'<small>%</small>';$('stat-morale').innerHTML=Math.round(stats.morale)+'<small>%</small>';
  $('stat-coffee').textContent=s.coffee?.status==='brewing'?'A fresh pot is brewing':s.coffee?.status==='stale'?'This pot has seen things':stats.coffee>65?'Fresh & fully stocked':stats.coffee>20?'Running a little low':'Caffeine emergency';
- const queue=s.phoneQueue||{};$('queue-waiting').textContent=(queue.waiting||0)+' waiting';$('queue-answered').textContent=(queue.answered||0)+' answered · '+(queue.missed||0)+' missed';$('phone-queue').classList.toggle('ringing',!!queue.ringing);$('queue-go').disabled=s.phase!=='playing';
+ const queue=s.phoneQueue||{};$('queue-waiting').textContent=(queue.waiting||0)+' waiting';$('queue-answered').textContent=(queue.answered||0)+' answered · '+(queue.missed||0)+' missed';$('phone-queue').classList.toggle('ringing',!!queue.ringing);$('queue-go').disabled=!['playing','paused'].includes(s.phase);
  const unread=(s.deskNotes||[]).filter(n=>n.ownerId===p.id&&!n.read).length;$('my-desk-go').textContent=unread?'My desk · '+unread+' new note'+(unread===1?'':'s')+' ↗':'My desk ↗';
  $('stress-label').textContent=Math.round(p.stress||0)+'%';$('stress-meter').style.width=Math.min(100,p.stress||0)+'%';$('stress-meter').style.background=p.stress>70?'#c68d70':'#a7b47f';$('stress-hint').textContent=p.stress>70?'Time for a coffee break. Or a very deep breath.':p.stress>35?'A little hectic. A little coffee might help.':"Deep breaths. You've got this.";
  $('day-label').textContent='DAY '+String(s.day||1).padStart(2,'0');
@@ -206,10 +209,11 @@ function updateUI(){
  if(e){$('event-title').textContent=e.title;$('event-description').textContent=e.description;$('event-go').textContent=(e.type==='fire'?'To assembly':e.type==='phone'||e.type==='music'?'Ask for quiet':e.actionLabel||'Handle it')+' ↗';if(lastEventId!==e.id){lastEventId=e.id;tone(460,.2);}}
  const n=builder?.active?null:nearest();$('interact-prompt').classList.toggle('hidden',!n);if(n)$('interact-label').textContent=n.label;
  const entry=s.log?.[0];if(entry){const text=typeof entry==='string'?entry:entry.text;if(text&&text!==lastLog){$('activity-message').textContent=text;lastLog=text;}}
- if(chat)chat.render(net.active?net.room:null);refreshDirectory();updateRoom();updateSummon();if($('task-dialog').open&&net.active&&!model.state.currentTask)closeTask();
+ if(chat)chat.render(net.active?net.room:null);refreshDirectory();updateRoom();updateSummon();mobile?.update();if($('task-dialog').open&&net.active&&!model.state.currentTask)closeTask();
  if(s.phase==='ended')showResults();
 }
-canvas.addEventListener('pointerdown',e=>{if(builder?.active||e.button!==0)return;canvas.focus({preventScroll:true});if(model.state.phase!=='playing'){if(model.state.phase==='lobby')toast('Create your office alter ego, then clock in.');return;}const id=view.hitTest(e.clientX,e.clientY);if(id){const target=typeof id==='string'?id:id.id;goTo(target);if(target.startsWith('npc:')){chat.open('talk');chat.npcSelect.value=target.slice(4);}}else{const p=view.screenToWorld(e.clientX,e.clientY);if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y))walk(p.x,p.y);}});
+function canvasTap(clientX,clientY){if(builder?.active)return;canvas.focus({preventScroll:true});if(model.state.phase!=='playing'){if(model.state.phase==='lobby')toast('Create your office alter ego, then clock in.');return;}const id=view.hitTest(clientX,clientY);if(id){const target=typeof id==='string'?id:id.id;goTo(target);if(target.startsWith('npc:')){chat.open('talk');chat.npcSelect.value=target.slice(4);}}else{const p=view.screenToWorld(clientX,clientY);if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y))walk(p.x,p.y);}}
+canvas.addEventListener('pointerdown',e=>{if(builder?.active||mobile?.compact||e.button!==0)return;canvasTap(e.clientX,e.clientY);});
 canvas.addEventListener('pointermove',e=>{if(builder?.active)return;const id=view.hitTest(e.clientX,e.clientY);view.hovered=typeof id==='string'?id:id?.id||null;canvas.style.cursor=id?'pointer':'crosshair';const st=model.stations.find(s=>s.id===view.hovered),desk=(model.desks||[]).find(d=>'desk:'+d.id===view.hovered);const tip=$('walk-tooltip');tip.classList.toggle('hidden',!st&&!desk);if(st||desk){const box=canvas.getBoundingClientRect();tip.textContent=(desk?deskName(desk):st.label)+' · Click to walk';tip.style.left=Math.max(8,Math.min(box.width-180,e.clientX-box.left+12))+'px';tip.style.top=Math.max(20,e.clientY-box.top-30)+'px';}});
 canvas.addEventListener('pointerleave',()=>{view.hovered=null;$('walk-tooltip').classList.add('hidden');});
 const movementKeys=['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'];
@@ -222,11 +226,11 @@ window.addEventListener('keydown',e=>{
 });
 window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));window.addEventListener('blur',()=>{keys.clear();mobileDirection=null;});
 document.querySelectorAll('[data-dir]').forEach(b=>{b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);mobileDirection=b.dataset.dir.split(',').map(Number);});['pointerup','pointercancel','lostpointercapture'].forEach(event=>b.addEventListener(event,()=>mobileDirection=null));});
-document.addEventListener('visibilitychange',()=>{audio.discardHistory(model.state.banter||[]);if(document.hidden){audio.setActive(false);keys.clear();if(!net.active&&model.state.phase==='playing')pause();save();}});
+document.addEventListener('visibilitychange',()=>{audio.discardHistory(model.state.banter||[]);if(document.hidden){touch?.cancel();builder?.cancelInteraction?.();audio.setActive(false);keys.clear();if(!net.active&&model.state.phase==='playing')pause();save();}});
 window.addEventListener('beforeunload',save);
 function frame(now){
  const dt=Math.min(.05,Math.max(0,(now-lastFrame)/1000));lastFrame=now;simulationTime+=dt;
- if(model.state.phase==='playing'&&!builder?.active&&!document.querySelector('dialog[open]')){let dx=(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),dy=(keys.has('s')||keys.has('arrowdown')?1:0)-(keys.has('w')||keys.has('arrowup')?1:0);if(mobileDirection)[dx,dy]=mobileDirection;
+ if(model.state.phase==='playing'&&!builder?.active&&!mobile?.blocking&&!document.querySelector('dialog[open]')){let dx=(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),dy=(keys.has('s')||keys.has('arrowdown')?1:0)-(keys.has('w')||keys.has('arrowup')?1:0);if(mobileDirection)[dx,dy]=mobileDirection;
  if(dx||dy){const wx=(dx+dy)*.7071,wy=(dy-dx)*.7071;if(net.active)net.moveDirection(wx,wy,dt);else model.moveDirection(wx,wy,dt);}}
  if(net.active)net.step(dt);else model.update(dt);view.render(simulationTime);
  if(now-lastUI>180){updateUI();lastUI=now;}
@@ -234,7 +238,7 @@ function frame(now){
  audio.update(model.state,dt,{quiet:builder?.active||!!document.querySelector('dialog[open]:not(#audio-dialog)'),sessionKey:(net.active?net.room?.code||'online':'solo')+':'+model.state.day+':'+model.state.player.id+':'+model.state.player.name});
  requestAnimationFrame(frame);
 }
-builder=new FloorBuilder(model,view,{toast,onDone:()=>{if(model.state.phase==='lobby'){$('lobby-panel').classList.remove('hidden');}else{$('shift-panel').classList.remove('hidden');}refreshDirectory();}});
+builder=new FloorBuilder(model,view,{toast,onOpen:()=>mobile?.onBuilderOpen(),onToolChange:()=>{touch?.cancel();if(mobile?.compact&&builder?.active&&mobile.mode==='builder')mobile.closeSheet();},onDone:()=>{mobile?.onBuilderDone();if(model.state.phase==='lobby'){$('lobby-panel').classList.remove('hidden');}else{$('shift-panel').classList.remove('hidden');}refreshDirectory();}});
 builder.loadSaved();
 chat=new OfficeChat(model,{toast,audio,onSend:async text=>{const result=await net.enqueue('chat',{text},true);if(result.kind==='blocked')throw Error(result.message);},onTalk:(npcId,choice)=>action('talk',{npcId,choice}),onWalk:id=>goTo('npc:'+id)});
 $('queue-go').onclick=()=>goTo('call');
@@ -242,7 +246,7 @@ $('chat-toggle').onclick=()=>chat.open('overheard');
 $('builder-open').onclick=()=>{if(net.active){toast('Choose a floor before opening an online office.');return;}builder.open();};
 $('department-nav').onchange=e=>{if(e.target.value)goTo(e.target.value);};
 $('name-display').onchange=e=>{view.labelMode=e.target.value;};
-function zoom(delta){view.zoom=Math.max(1,Math.min(view.maxZoom||2.6,(view.zoom||1)+delta));view.resize();$('zoom-level').textContent=view.zoom<=1?'Fit':Math.round(view.zoom*100)+'%';}
+function zoom(delta){const r=canvas.getBoundingClientRect();view.zoomAt(Math.max(1,Math.min(view.maxZoom||2.6,(view.zoom||1)+delta)),r.left+r.width/2,r.top+r.height/2);$('zoom-level').textContent=view.zoom<=1?'Fit':Math.round(view.zoom*100)+'%';}
 $('zoom-out').onclick=()=>zoom(-.2);$('zoom-in').onclick=()=>zoom(.2);
 document.querySelectorAll('input[name="play-mode"]').forEach(input=>input.addEventListener('change',()=>{const mode=input.value;$('join-code-field').classList.toggle('hidden',mode!=='join');$('mode-help').textContent=mode==='solo'?'A little peace and quiet. Relatively speaking.':mode==='host'?'Open a shared office for up to four players. Your floor plan comes with you.':'Join your coworkers using their eight-character room code.';}));
 $('copy-invite').onclick=async()=>{const url=new URL(location.href);url.search='room='+net.room.code;try{await navigator.clipboard.writeText(url.href);toast('Office invite copied.');}catch{toast('Share this room code: '+net.room.code);}};
@@ -251,6 +255,8 @@ const summonNode=document.createElement('div');summonNode.className='summon-bann
 $('summon-go').onclick=()=>{if(model.state.summon)goTo(model.state.summon.station||'exec:'+model.state.summon.executiveId);};
 function updateSummon(){const call=model.state.summon;summonNode.classList.toggle('hidden',!call||builder?.active);if(call){$('summon-title').textContent=call.title||'Upper management needs attention';$('summon-description').textContent=call.description||call.shout;}}
 const invite=new URL(location.href).searchParams.get('room');if(invite){$('join-code').value=invite.trim().toUpperCase().slice(0,8);const join=document.querySelector('input[name="play-mode"][value="join"]');join.checked=true;join.dispatchEvent(new Event('change'));}
+mobile=new MobileOffice({model,view,chat,builder,network:net,onWalk:goTo,onZoom:zoom,onRecenter:()=>view.recenter(),onBlocking:()=>{keys.clear();mobileDirection=null;touch?.cancel();}});
+touch=new TouchControls(canvas,view,{onTap:canvasTap,enabled:()=>mobile.compact&&!mobile.blocking&&(!builder.active||builder.tool==='pan')&&!document.querySelector('dialog[open]'),onChange:()=>{$('zoom-level').textContent=view.zoom<=1?'Fit':Math.round(view.zoom*100)+'%';}});
 refreshDirectory();updateUI();requestAnimationFrame(frame);
 
 

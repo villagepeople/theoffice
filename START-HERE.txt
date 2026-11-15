@@ -1,4 +1,4 @@
-BENEFITS: AN OFFICE COMEDY — VERSION 2.3
+BENEFITS: AN OFFICE COMEDY — VERSION 2.4
 Upper management needs you.
 
 LOCAL PLAY
@@ -50,13 +50,22 @@ Solo play pauses during case dialogs. Online offices keep running.
 The office directory navigates to every department, shared area, and executive.
 Names can be shown in full, shortened, or hidden. Zoom controls offer a closer view.
 
+PHONES AND TABLETS
+Compact screens show a full-screen office. Tasks and Menu open panels; Chat
+opens only when requested. Directory finds desks and departments. Tap the
+floor to walk, drag to look around, pinch to zoom, or use the direction pad.
+Me recenters the camera. In Floor studio, Tools opens controls and Done saves.
+Pan & zoom explores the plan; Move pieces and adjustment arrows edit it.
+
 CHECKS AND BUILD
 node check-model.mjs    Runs 30 model checks.
 node check-office.mjs   Checks manager routines, queues, notes, and migrations.
 node check-audio.mjs    Checks audio activation, mute, scheduling, and fallbacks.
-node check-network.mjs  Runs eighteen multiplayer integration groups.
+node check-network.mjs  Runs nineteen multiplayer integration groups.
 node check-client.mjs   Runs five client recovery checks.
-node check-builder.mjs  Runs four floor-builder interaction checks.
+node check-builder.mjs  Runs nine floor-builder interaction checks.
+node check-touch.mjs    Checks touch gestures, camera anchors, labels and resizing.
+node check-mobile.mjs   Checks panels, focus, pause behavior and keyboard sizing.
 node build-worker.mjs   Bundles the game and API into dist/server/index.js.
 The network checks include concurrent rooms, SQLite persistence, shared cases,
 chat delivery, executive summons, session tokens, and host migration.

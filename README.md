@@ -109,8 +109,21 @@ arrives at the assembly area, then a firefighter gives the all-clear. Employees
 return to their own desks and the truck leaves. Mute and Mixer volumes apply to
 alarms as well as other office events.
 
+## Phones and tablets
+
+Compact screens and touch devices use a full-screen office, task/menu drawers,
+and an on-demand chat sheet. Tap the floor to walk, drag to pan, and pinch to
+zoom. Me recenters on your character; Directory finds every department and desk.
+The directional pad remains available in portrait and landscape.
+
+Floor studio offers Pan & zoom, Move pieces, and validated grid-step adjustment
+buttons. Tools opens the controls; Done saves and returns.
+
+The layout follows the visible viewport and safe areas. Inputs use readable
+font sizes, and chat adapts when the keyboard reduces available height.
+
 ## Future direction
 
-Mobile adaptation is deferred. The proposed training mode would give NPCs
+The proposed training mode would give NPCs
 role-specific knowledge and coaching skills; live AI agents and company-system
 integrations are not implemented in this version.

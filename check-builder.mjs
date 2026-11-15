@@ -111,6 +111,71 @@ try {
       assert.ok(messages.length > 0, 'rejected moves should explain why they were declined');
     }
   });
+
+  test('Pan mode leaves camera gestures to touch controls without changing furniture', () => {
+    const { model, builder } = setup(), initial = structuredClone(model.state.layout);
+    builder.tool = 'pan';
+    let consumed = 0;
+    const event = { ...pointer(82, 460), preventDefault() { consumed++; }, stopImmediatePropagation() { consumed++; } };
+    builder.down(event); builder.move(event); builder.up(event);
+    assert.equal(consumed, 0);
+    assert.deepEqual(model.state.layout, initial);
+    assert.equal(builder.undo.length, 0);
+    assert.equal(builder.view.cameraLocked, false);
+  });
+
+  test('a second touch cancels the pending edit until both fingers are released', () => {
+    const { model, builder } = setup(), initial = structuredClone(model.state.layout), start = { ...desk(model) };
+    const first = { ...pointer(start.x, start.y), pointerType: 'touch', isPrimary: true };
+    const second = { ...pointer(start.x + 50, start.y), pointerId: 2, pointerType: 'touch', isPrimary: false };
+    builder.down(first); builder.move({ ...first, clientX: first.clientX + 20 });
+    assert.ok(builder.view.ghost);
+    builder.down(second);
+    assert.equal(builder.drag, null); assert.equal(builder.view.ghost, null); assert.equal(builder.view.cameraLocked, false);
+    builder.move({ ...first, clientX: first.clientX + 40 });
+    builder.up(first); builder.up(second);
+    assert.deepEqual(model.state.layout, initial); assert.equal(builder.undo.length, 0); assert.equal(builder.multiTouch, false);
+    builder.down(first); builder.move({ ...first, clientX: first.clientX + 20 }); builder.up(first);
+    assert.equal(desk(model).x, start.x + 20, 'editing should recover after the canceled gesture');
+  });
+
+  test('pointer cancellation releases the edit camera and cannot commit a half-finished move', () => {
+    const { model, builder } = setup(), initial = structuredClone(model.state.layout), start = { ...desk(model) };
+    const event = pointer(start.x, start.y);
+    builder.down(event); builder.move({ ...event, clientX: event.clientX + 20 });
+    builder.cancelPointer(event); builder.up(event);
+    assert.deepEqual(model.state.layout, initial); assert.equal(builder.undo.length, 0);
+    assert.equal(builder.drag, null); assert.equal(builder.view.ghost, null); assert.equal(builder.view.cameraLocked, false);
+    assert.equal(builder.editPointers.size, 0);
+  });
+
+  test('nudge arrows move an assigned desk one grid step with validation and undo', () => {
+    const { model, builder } = setup(), initial = structuredClone(model.state.layout), start = { ...desk(model) };
+    builder.select('desk:desk-npc-0');
+    assert.equal(builder.nudge(1, 0), true);
+    assert.equal(desk(model).x, start.x + 20); assert.equal(desk(model).y, start.y);
+    assert.equal(desk(model).ownerId, start.ownerId); assert.equal(builder.undo.length, 1);
+    assert.equal(validateLayout(model.state.layout).valid, true);
+    model.setLayout(builder.undo.pop()); builder.refresh();
+    assert.deepEqual(model.state.layout, initial);
+    assert.equal(builder.nudge(10, 0), false); assert.equal(builder.undo.length, 0);
+  });
+
+  test('nudging a department moves its employee desks with it and rejects blocked placements', () => {
+    const { model, builder } = setup(), initial = structuredClone(model.state.layout);
+    builder.select('small'); assert.equal(builder.nudge(1, 0), true);
+    const moved = model.state.layout;
+    assert.equal(moved.stations.find(s => s.id === 'small').x, initial.stations.find(s => s.id === 'small').x + 20);
+    for (const d of moved.desks.filter(d => d.role === 'small')) {
+      assert.equal(d.x, initial.desks.find(p => p.id === d.id).x + 20); assert.equal(d.ownerId, initial.desks.find(p => p.id === d.id).ownerId);
+    }
+    builder.select('desk:desk-npc-0');
+    for (let i = 0; i < 10; i++) {
+      const before = structuredClone(model.state.layout), undoLength = builder.undo.length;
+      if (!builder.nudge(-1, 0)) { assert.deepEqual(model.state.layout, before); assert.equal(builder.undo.length, undoLength); return; }
+    }
+    assert.fail('repeated nudges must eventually reject the floor boundary');
+  });
 } finally {
   if (originalDocument === undefined) delete globalThis.document;
   else globalThis.document = originalDocument;
